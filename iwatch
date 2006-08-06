@@ -61,7 +61,6 @@ sub pathwatch {
   if(-e "$path") {
     if($mode eq "single") {
       print "Watch $path\n" if($DEBUG);
-      #$inotify->watch ("$path", IN_ALL_EVENTS, \&mywatch);
       $inotify->watch ("$path", $WATCHMASK, \&mywatch);
     }
     elsif($mode eq "recursive") {
