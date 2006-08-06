@@ -1,0 +1,48 @@
+iWatch
+
+Author: Cahya Wirawan.
+
+iWatch is a realtime filesystem monitoring program. Its purpose is to monitor 
+any changes in a specific directory or file and send email notification 
+immediately after the change. This can be very useful to watch a sensible file 
+or directory against any changes, like files /etc/passwd,/etc/shadow or 
+directory /bin or to monitor the root directory of a website against 
+any unwanted changes.
+
+This simple program/script is written in Perl and need inotify in Linux 
+kernel >= 2.6.13. It reads an XML configuration file. In this configuration 
+file you can put a list of directories/targets you want to monitor, and each 
+target can be setup with each own contact point (email address). This contact 
+point will get an email notification for any changes in the monitored targets. 
+It is also possible to monitor a directory recursively.
+
+Usage: iwatch [-c <config file>] [-v]
+
+sample of config file: 
+
+<config>
+  <guard email="myadmin@enemy.org" name="IWatch"></guard>
+  <watchlist>
+    <title>Public Website</title>
+    <contactpoint email="webmaster@enemy.org" name="Web Master"></contactpoint>
+    <path type="single">/var/www/localhost/htdocs</path>
+    <path type="single">/var/www/localhost/htdocs/About</path>
+    <path type="recursive">/var/www/localhost/htdocs/Photos</path>
+  </watchlist>
+  <watchlist>
+    <title>Operating System</title>
+    <contactpoint email="admin@enemy.org" name="Administrator"></contactpoint>
+    <path type="recursive">/etc/apache2</path>
+    <path type="single">/etc/passwd</path>
+    <path type="recursive">/etc/mail</path>
+    <path type="exception">/etc/mail/statistics</path>
+  </watchlist>
+</config>
+
+With this configuration, iwatch will monitor a single directory 
+/var/www/localhost/htdocs withouth it's sub directories, and any notification
+will be sent to the contact point webmaster@enemy.org.
+But it will monitor the whole directory tree of  /etc/apache2, including 
+any sub directories created later after the IWatch is started.
+You can use also exception here if you don't want to get notification for 
+a file or subdirectory inside the monitored directory.
