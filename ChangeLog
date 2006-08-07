@@ -1,9 +1,12 @@
 iWatch: Realtime filesystem monitor
 
-version 0.0.2:
+version 0.0.3 (7. August 2006):
+        Status System:
+        * Fixes.
+
+version 0.0.2 (6. August 2006):
 	Status System:
 	* First release in sourceforge and few fixes.
-
 	
 version 0.0.1 (14. October 2005):
 	* The very very first test release in enemy.org :)

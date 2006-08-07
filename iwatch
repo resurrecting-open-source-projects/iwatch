@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 # iWatch version 0.0.2
-# By Cahya Wirawan <cahya at enemy . org>
+# By Cahya Wirawan <cahya at gmx dot at>
 # Usage: iwatch [-c <configfile.xml>] [-v]
-# IWatch monitor any changes in directories/files specified
+# iWatch monitor any changes in directories/files specified
 # in the configuration file, and send email alert.
 # This program needs inotify in linux kernel >= 2.6.13  
 
@@ -11,7 +11,6 @@ use Getopt::Std;
 use Event;
 use Linux::Inotify2;
 use File::Find ();
-use Digest::MD5;
 use Mail::Sendmail;
 use Sys::Hostname;
 use XML::Simple;
@@ -21,7 +20,7 @@ my $DEBUG = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $WATCHMASK = IN_CLOSE_WRITE|IN_CREATE|IN_DELETE|IN_MOVE|IN_DELETE_SELF;
 #my $WATCHMASK = IN_ALL_EVENTS;
-my %Watcher;
+my %WatchList;
 my %Mail;
 my %Events;
 sub wanted;
@@ -42,10 +41,10 @@ Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
 foreach my $watchpoint (@{$config->{watchlist}}) {
   foreach my $path (@{$watchpoint->{path}}) {
     if($path->{type} eq "exception") {
-      $Watcher{"!$path->{content}"} = $watchpoint->{contactpoint}->{email};
+      $WatchList{"!$path->{content}"} = $watchpoint->{contactpoint}->{email};
     }
     else {
-      $Watcher{$path->{content}} = $watchpoint->{contactpoint}->{email};
+      $WatchList{$path->{content}} = $watchpoint->{contactpoint}->{email};
     }
     print "$path->{content} : $watchpoint->{contactpoint}->{email}\n" if($DEBUG);
     pathwatch($path->{type},$path->{content});
@@ -72,19 +71,18 @@ sub pathwatch {
 sub wanted {
   if(-d $File::Find::name) {
     print "Watch $File::Find::name\n" if($DEBUG);
-    #$inotify->watch ("$File::Find::name", IN_ALL_EVENTS, \&mywatch);
     $inotify->watch ("$File::Find::name", $WATCHMASK, \&mywatch);
   }
 }
 
-sub getWatcher {
+sub getWatchList {
   my ($path) = @_;
   print "Path: $path\n" if($DEBUG);
-  return $Watcher{$path} if(defined $Watcher{$path});
-  foreach my $key (sort keys %Watcher) {
+  return $WatchList{$path} if(defined $WatchList{$path});
+  foreach my $key (sort keys %WatchList) {
     print "key:$key ; path: $path\n" if($DEBUG);
     return undef if("!$path" =~ /^$key/);
-    return $Watcher{$key} if($path =~ /^$key/);
+    return $WatchList{$key} if($path =~ /^$key/);
   }
   return undef;
 }
@@ -93,70 +91,56 @@ sub mywatch {
   my $e = shift;
   my $filename = $e->fullname;
   printf ("events for <%s> received: %x\n", $filename, $e->mask) if($DEBUG);
-  return if(defined $Watcher{"!$filename"});
+  return if(defined $WatchList{"!$filename"});
   if($e->IN_CREATE && -d $filename) {
-     #$inotify->watch ($filename, IN_ALL_EVENTS, \&mywatch);
      $inotify->watch ($filename, $WATCHMASK, \&mywatch);
   }
   elsif($e->IN_CLOSE_WRITE && -f $filename) {
-    open(FILE, $filename) or warn "Can't open '$filename': $!";
-    binmode(FILE);
-    #$Mail{To} = $Watcher{$e->{w}->{name}};
-    $Mail{To} = getWatcher($e->{w}->{name});
+    $Mail{To} = getWatchList($e->{w}->{name});
     return if(!defined($Mail{To}));
-    my $Message = "IWatch:" . Digest::MD5->new->addfile(*FILE)->hexdigest . ":$filename";
+    my $Message = "iWatch: $filename";
     $Mail{Message} = $Message;
-    $Mail{Subject} = "IWatch:" . hostname() . ":Change:$filename";  
+    $Mail{Subject} = "iWatch:" . hostname() . ":Change:$filename";  
     sendmail(%Mail) or warn $Mail::Sendmail::error; 
-    close(FILE);
     print "to: $Mail{To} : $Message\n" if($DEBUG);
   }
   elsif($e->IN_DELETE) {
     my $Message = "";
-    #$Mail{To} = $Watcher{$e->{w}->{name}};
-    $Mail{To} = getWatcher($e->{w}->{name});
+    $Mail{To} = getWatchList($e->{w}->{name});
     return if(!defined($Mail{To}));
     $Mail{Message} = $Message;
-    $Mail{Subject} = "IWatch:" . hostname() . ":Delete:$filename";
+    $Mail{Subject} = "iWatch:" . hostname() . ":Delete:$filename";
     sendmail(%Mail) or warn $Mail::Sendmail::error;
     print "to: $Mail{To} : $Message\n" if($DEBUG);
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
-    #$Mail{To} = $Watcher{$e->{w}->{name}};
-    $Mail{To} = getWatcher($e->{w}->{name});
+    #$Mail{To} = $WatchList{$e->{w}->{name}};
+    $Mail{To} = getWatchList($e->{w}->{name});
     return if(!defined($Mail{To}));
     if($e->IN_MOVED_FROM) {
       $Events{$e->{cookie}} = "$filename";
     }
     elsif($e->IN_MOVED_TO) {
-      open(FILE, $filename) or warn "Can't open '$filename': $!";
-      binmode(FILE);
-      #$Mail{To} = $Watcher{$e->{w}->{name}};
-      $Mail{To} = getWatcher($e->{w}->{name});
+      $Mail{To} = getWatchList($e->{w}->{name});
       return if(!defined($Mail{To}));
-      my $Message = "IWatch:" . Digest::MD5->new->addfile(*FILE)->hexdigest;
       my $FileMove = $Events{$e->{cookie}} . ":$filename";
-      $Mail{Message} = $Message . ":$FileMove";
-      $Mail{Subject} = "IWatch:" . hostname() . ":Move:$FileMove";
+      $Mail{Message} = "iWatch:$FileMove";
+      $Mail{Subject} = "iWatch:" . hostname() . ":Move:$FileMove";
       sendmail(%Mail) or warn $Mail::Sendmail::error;
       print "to: $Mail{To} : Move from " . $Events{$e->{cookie}} . " to $filename\n" if($DEBUG);
       undef $Events{$e->{cookie}};
     }
   }
-  elsif($e->IN_DELETE_SELF && -f $filename && defined $Watcher{$filename}) {
+  elsif($e->IN_DELETE_SELF && -f $filename && defined $WatchList{$filename}) {
     print "rewatch: $filename\n" if($DEBUG);
-    open(FILE, $filename) or warn "Can't open '$filename': $!";
-    binmode(FILE);
-    $Mail{To} = getWatcher($e->{w}->{name});
+    $Mail{To} = getWatchList($e->{w}->{name});
     return if(!defined($Mail{To}));
-    my $Message = "IWatch:" . Digest::MD5->new->addfile(*FILE)->hexdigest . ":$filename";
+    my $Message = "iWatch: $filename";
     $Mail{Message} = $Message;
-    $Mail{Subject} = "IWatch:" . hostname() . ":Change:$filename";
+    $Mail{Subject} = "iWatch:" . hostname() . ":Replaced:$filename";
     sendmail(%Mail) or warn $Mail::Sendmail::error;
-    close(FILE);
     $inotify->watch ("$filename", $WATCHMASK, \&mywatch);
     print "to: $Mail{To} : $Message\n" if($DEBUG);
   }
 };
-
 

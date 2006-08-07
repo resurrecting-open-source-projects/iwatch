@@ -21,17 +21,17 @@ Usage: iwatch [-c <config file>] [-v]
 sample of config file: 
 
 <config>
-  <guard email="myadmin@enemy.org" name="IWatch"></guard>
+  <guard email="myadmin@localhost" name="IWatch"></guard>
   <watchlist>
     <title>Public Website</title>
-    <contactpoint email="webmaster@enemy.org" name="Web Master"></contactpoint>
+    <contactpoint email="webmaster@localhost" name="Web Master"></contactpoint>
     <path type="single">/var/www/localhost/htdocs</path>
     <path type="single">/var/www/localhost/htdocs/About</path>
     <path type="recursive">/var/www/localhost/htdocs/Photos</path>
   </watchlist>
   <watchlist>
     <title>Operating System</title>
-    <contactpoint email="admin@enemy.org" name="Administrator"></contactpoint>
+    <contactpoint email="admin@localhost" name="Administrator"></contactpoint>
     <path type="recursive">/etc/apache2</path>
     <path type="single">/etc/passwd</path>
     <path type="recursive">/etc/mail</path>
@@ -41,7 +41,7 @@ sample of config file:
 
 With this configuration, iwatch will monitor a single directory 
 /var/www/localhost/htdocs withouth it's sub directories, and any notification
-will be sent to the contact point webmaster@enemy.org.
+will be sent to the contact point webmaster@localhost.
 But it will monitor the whole directory tree of  /etc/apache2, including 
 any sub directories created later after the IWatch is started.
 You can use also exception here if you don't want to get notification for 

@@ -1,24 +1,26 @@
-<!-- IWatch configuration -->
-<!-- You can create many difference watch lists, each with it's own contact point -->
-<!-- And in this watch list you put all directories and files you want to monitor -->
-<!-- The path type decide how a directory is monitored, recursively or as single  -->
-<!-- directory. But it will monitor all new created directory (after iwatch       -->
-<!-- started) recursively regardless of path type.                                -->
-<!-- IWatch will send email alert with guard's email address as sender            -->
-<!-- Don't forget to set the correct email address here                           -->
+<!-- iWatch configuration -->
+<!--
+You can create many difference watch lists, each with it's own contact point
+And in this watch list you put all directories and files you want to monitor
+The path type decide how a directory is monitored, recursively or as single
+directory. But it will monitor all new created directory (after iwatch
+started) recursively regardless of path type.
+iWatch will send email alert with guard's email address as sender
+Don't forget to set the correct email address here
+-->
 
 <config>
-  <guard email="root@enemy.org" name="IWatch"></guard>
+  <guard email="root@localhost" name="IWatch"></guard>
   <watchlist>
     <title>Public Website</title>
-    <contactpoint email="webmaster@enemy.org" name="Web Master"></contactpoint>
+    <contactpoint email="webmaster@localhost" name="Web Master"></contactpoint>
     <path type="single">/var/www/localhost/htdocs</path>
     <path type="single">/var/www/localhost/htdocs/About</path>
     <path type="recursive">/var/www/localhost/htdocs/Photos</path>
   </watchlist>
   <watchlist>
     <title>Operating System</title>
-    <contactpoint email="admin@enemy.org" name="Administrator"></contactpoint>
+    <contactpoint email="root@localhost" name="Administrator"></contactpoint>
     <path type="recursive">/etc/apache2</path>
     <path type="single">/bin</path>
     <path type="single">/etc/passwd</path>
@@ -27,5 +29,3 @@
     <path type="exception">/etc/mail/statistics</path>
   </watchlist>
 </config>
-
-  
