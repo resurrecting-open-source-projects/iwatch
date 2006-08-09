@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# iWatch version 0.0.2
+# iWatch version 0.0.3
 # By Cahya Wirawan <cahya at gmx dot at>
 # Usage: iwatch [-c <configfile.xml>] [-v]
 # iWatch monitor any changes in directories/files specified
@@ -40,12 +40,9 @@ Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
 
 foreach my $watchpoint (@{$config->{watchlist}}) {
   foreach my $path (@{$watchpoint->{path}}) {
-    if($path->{type} eq "exception") {
-      $WatchList{"!$path->{content}"} = $watchpoint->{contactpoint}->{email};
-    }
-    else {
-      $WatchList{$path->{content}} = $watchpoint->{contactpoint}->{email};
-    }
+    $WatchList{$path->{type}}{$path->{content}}{"contactpoint"} = $watchpoint->{contactpoint}->{email};
+    $WatchList{$path->{type}}{$path->{content}}{"exec"} = $path->{exec} if(defined($path->{exec}));
+
     print "$path->{content} : $watchpoint->{contactpoint}->{email}\n" if($DEBUG);
     pathwatch($path->{type},$path->{content});
   }
@@ -78,11 +75,14 @@ sub wanted {
 sub getWatchList {
   my ($path) = @_;
   print "Path: $path\n" if($DEBUG);
-  return $WatchList{$path} if(defined $WatchList{$path});
-  foreach my $key (sort keys %WatchList) {
-    print "key:$key ; path: $path\n" if($DEBUG);
-    return undef if("!$path" =~ /^$key/);
-    return $WatchList{$key} if($path =~ /^$key/);
+  return undef if($WatchList{"exception"}{$path});
+  foreach my $key (keys %{$WatchList{"exception"}}) {
+    return undef if("$path" =~ /^$key/);
+  }
+  return $WatchList{"single"}{$path} if(defined $WatchList{"single"}{$path});
+  return $WatchList{"recursive"}{$path} if(defined $WatchList{"recursive"}{$path});
+  foreach my $key (keys %{$WatchList{"recursive"}}) {
+    return $WatchList{"recursive"}{$key} if($path =~ /^$key/);
   }
   return undef;
 }
@@ -91,56 +91,52 @@ sub mywatch {
   my $e = shift;
   my $filename = $e->fullname;
   printf ("events for <%s> received: %x\n", $filename, $e->mask) if($DEBUG);
-  return if(defined $WatchList{"!$filename"});
+  return if(defined $WatchList{"exception"}{$filename});
+  my $Path = getWatchList($e->{w}->{name});
+  return if(!defined($Path));
+  undef $Mail{Message};
   if($e->IN_CREATE && -d $filename) {
-     $inotify->watch ($filename, $WATCHMASK, \&mywatch);
+    print "Dir $filename is watched\n" if($DEBUG);
+    $inotify->watch ($filename, $WATCHMASK, \&mywatch);
   }
   elsif($e->IN_CLOSE_WRITE && -f $filename) {
-    $Mail{To} = getWatchList($e->{w}->{name});
-    return if(!defined($Mail{To}));
     my $Message = "iWatch: $filename";
     $Mail{Message} = $Message;
     $Mail{Subject} = "iWatch:" . hostname() . ":Change:$filename";  
-    sendmail(%Mail) or warn $Mail::Sendmail::error; 
-    print "to: $Mail{To} : $Message\n" if($DEBUG);
+    print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
   }
   elsif($e->IN_DELETE) {
     my $Message = "";
-    $Mail{To} = getWatchList($e->{w}->{name});
-    return if(!defined($Mail{To}));
     $Mail{Message} = $Message;
     $Mail{Subject} = "iWatch:" . hostname() . ":Delete:$filename";
-    sendmail(%Mail) or warn $Mail::Sendmail::error;
-    print "to: $Mail{To} : $Message\n" if($DEBUG);
+    print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
-    #$Mail{To} = $WatchList{$e->{w}->{name}};
-    $Mail{To} = getWatchList($e->{w}->{name});
-    return if(!defined($Mail{To}));
     if($e->IN_MOVED_FROM) {
       $Events{$e->{cookie}} = "$filename";
     }
     elsif($e->IN_MOVED_TO) {
-      $Mail{To} = getWatchList($e->{w}->{name});
-      return if(!defined($Mail{To}));
       my $FileMove = $Events{$e->{cookie}} . ":$filename";
       $Mail{Message} = "iWatch:$FileMove";
       $Mail{Subject} = "iWatch:" . hostname() . ":Move:$FileMove";
-      sendmail(%Mail) or warn $Mail::Sendmail::error;
-      print "to: $Mail{To} : Move from " . $Events{$e->{cookie}} . " to $filename\n" if($DEBUG);
+      print "to: $Path->{'contactpoint'} : Move from " . $Events{$e->{cookie}} . " to $filename\n" if($DEBUG);
       undef $Events{$e->{cookie}};
     }
   }
   elsif($e->IN_DELETE_SELF && -f $filename && defined $WatchList{$filename}) {
     print "rewatch: $filename\n" if($DEBUG);
-    $Mail{To} = getWatchList($e->{w}->{name});
-    return if(!defined($Mail{To}));
     my $Message = "iWatch: $filename";
     $Mail{Message} = $Message;
     $Mail{Subject} = "iWatch:" . hostname() . ":Replaced:$filename";
-    sendmail(%Mail) or warn $Mail::Sendmail::error;
     $inotify->watch ("$filename", $WATCHMASK, \&mywatch);
-    print "to: $Mail{To} : $Message\n" if($DEBUG);
+    print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
+  }
+  if(defined($Path->{exec})) {
+    system ("$Path->{exec}");
+  }
+  if(defined($Mail{Message})) {
+    $Mail{To} = $Path->{'contactpoint'};
+    sendmail(%Mail) or warn $Mail::Sendmail::error;
   }
 };
 
