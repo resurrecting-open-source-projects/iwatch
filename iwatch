@@ -1,7 +1,7 @@
 #!/usr/bin/perl
-# iWatch version 0.0.3
+# iWatch
 # By Cahya Wirawan <cahya at gmx dot at>
-# Usage: iwatch [-c <configfile.xml>] [-v]
+# Usage: iwatch [-c <configfile.xml>] [-v] [-d]
 # iWatch monitor any changes in directories/files specified
 # in the configuration file, and send email alert.
 # This program needs inotify in linux kernel >= 2.6.13  
@@ -14,8 +14,12 @@ use File::Find ();
 use Mail::Sendmail;
 use Sys::Hostname;
 use XML::Simple;
+use POSIX;
+use String::Format;
 #use Data::Dumper;
 
+my $PROGRAM = "iWatch";
+my $VERSION = "0.0.4";
 my $DEBUG = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $WATCHMASK = IN_CLOSE_WRITE|IN_CREATE|IN_DELETE|IN_MOVE|IN_DELETE_SELF;
@@ -23,17 +27,39 @@ my $WATCHMASK = IN_CLOSE_WRITE|IN_CREATE|IN_DELETE|IN_MOVE|IN_DELETE_SELF;
 my %WatchList;
 my %Mail;
 my %Events;
+my $Filename;
 sub wanted;
 sub mywatch;
 sub pathwatch;
 
 my %options=();
-getopts("c:v",\%options);
+my %formats = (
+  'p' => $PROGRAM,
+  'v' => $VERSION,
+  'd' => sub { POSIX::strftime($_[0], localtime) },
+  'f' => sub { $Filename }
+);
+getopts("c:dv",\%options);
 
 $CONFIGFILE = $options{c} if defined $options{c};
 $DEBUG = 1 if defined $options{v};
+delete @ENV{qw(ENV IFS CDPATH)};
+$ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
 my $config = XMLin($CONFIGFILE, ForceArray => ['path','watchlist']);
+
+if(defined $options{d}) {
+  my $ChildPid = fork;
+  die "cannot fork: $!\n" if(!defined $ChildPid);
+  exit if($ChildPid);
+
+  POSIX::setsid() or die "Can't start a new session: $!";
+  open STDIN, "</dev/null";
+  open STDOUT, ">/dev/null";
+  open STDERR, ">&STDOUT";
+  umask 0;
+  chdir "/";
+}
 
 my $inotify = new Linux::Inotify2;
 Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
@@ -42,6 +68,8 @@ foreach my $watchpoint (@{$config->{watchlist}}) {
   foreach my $path (@{$watchpoint->{path}}) {
     $WatchList{$path->{type}}{$path->{content}}{"contactpoint"} = $watchpoint->{contactpoint}->{email};
     $WatchList{$path->{type}}{$path->{content}}{"exec"} = $path->{exec} if(defined($path->{exec}));
+    $WatchList{$path->{type}}{$path->{content}}{"alert"} = 
+      (defined($path->{alert}) && $path->{alert} eq "off") ? 0:1;
 
     print "$path->{content} : $watchpoint->{contactpoint}->{email}\n" if($DEBUG);
     pathwatch($path->{type},$path->{content});
@@ -89,52 +117,54 @@ sub getWatchList {
 
 sub mywatch {
   my $e = shift;
-  my $filename = $e->fullname;
-  printf ("events for <%s> received: %x\n", $filename, $e->mask) if($DEBUG);
-  return if(defined $WatchList{"exception"}{$filename});
+  $Filename = $e->fullname;
+  printf ("events for <%s> received: %x\n", $Filename, $e->mask) if($DEBUG);
+  return if(defined $WatchList{"exception"}{$Filename});
   my $Path = getWatchList($e->{w}->{name});
   return if(!defined($Path));
   undef $Mail{Message};
-  if($e->IN_CREATE && -d $filename) {
-    print "Dir $filename is watched\n" if($DEBUG);
-    $inotify->watch ($filename, $WATCHMASK, \&mywatch);
+  if($e->IN_CREATE && -d $Filename) {
+    print "Dir $Filename is watched\n" if($DEBUG);
+    $inotify->watch ($Filename, $WATCHMASK, \&mywatch);
   }
-  elsif($e->IN_CLOSE_WRITE && -f $filename) {
-    my $Message = "iWatch: $filename";
+  elsif($e->IN_CLOSE_WRITE && -f $Filename) {
+    my $Message = "$PROGRAM: $Filename";
     $Mail{Message} = $Message;
-    $Mail{Subject} = "iWatch:" . hostname() . ":Change:$filename";  
+    $Mail{Subject} = "$PROGRAM:" . hostname() . ":Change:$Filename";  
     print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
   }
   elsif($e->IN_DELETE) {
     my $Message = "";
     $Mail{Message} = $Message;
-    $Mail{Subject} = "iWatch:" . hostname() . ":Delete:$filename";
+    $Mail{Subject} = "$PROGRAM:" . hostname() . ":Delete:$Filename";
     print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
     if($e->IN_MOVED_FROM) {
-      $Events{$e->{cookie}} = "$filename";
+      $Events{$e->{cookie}} = "$Filename";
     }
     elsif($e->IN_MOVED_TO) {
-      my $FileMove = $Events{$e->{cookie}} . ":$filename";
-      $Mail{Message} = "iWatch:$FileMove";
-      $Mail{Subject} = "iWatch:" . hostname() . ":Move:$FileMove";
-      print "to: $Path->{'contactpoint'} : Move from " . $Events{$e->{cookie}} . " to $filename\n" if($DEBUG);
+      my $FileMove = $Events{$e->{cookie}} . ":$Filename";
+      $Mail{Message} = "$PROGRAM:$FileMove";
+      $Mail{Subject} = "$PROGRAM:" . hostname() . ":Move:$FileMove";
+      print "to: $Path->{'contactpoint'} : Move from " . $Events{$e->{cookie}} . " to $Filename\n" if($DEBUG);
       undef $Events{$e->{cookie}};
     }
   }
-  elsif($e->IN_DELETE_SELF && -f $filename && defined $WatchList{$filename}) {
-    print "rewatch: $filename\n" if($DEBUG);
-    my $Message = "iWatch: $filename";
+  elsif($e->IN_DELETE_SELF && -f $Filename && defined $WatchList{$Filename}) {
+    print "rewatch: $Filename\n" if($DEBUG);
+    my $Message = "$PROGRAM: $Filename";
     $Mail{Message} = $Message;
-    $Mail{Subject} = "iWatch:" . hostname() . ":Replaced:$filename";
-    $inotify->watch ("$filename", $WATCHMASK, \&mywatch);
+    $Mail{Subject} = "$PROGRAM:" . hostname() . ":Replaced:$Filename";
+    $inotify->watch ("$Filename", $WATCHMASK, \&mywatch);
     print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
   }
   if(defined($Path->{exec})) {
-    system ("$Path->{exec}");
+    my $command = stringf("$Path->{exec}",%formats);
+    print "Command: $command\n" if($DEBUG);
+    system ("$command");
   }
-  if(defined($Mail{Message})) {
+  if(defined($Mail{Message}) && $Path->{'alert'}) {
     $Mail{To} = $Path->{'contactpoint'};
     sendmail(%Mail) or warn $Mail::Sendmail::error;
   }
