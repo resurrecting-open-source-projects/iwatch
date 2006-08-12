@@ -22,8 +22,6 @@ my $PROGRAM = "iWatch";
 my $VERSION = "0.0.4";
 my $DEBUG = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
-my $WATCHMASK = IN_CLOSE_WRITE|IN_CREATE|IN_DELETE|IN_MOVE|IN_DELETE_SELF;
-#my $WATCHMASK = IN_ALL_EVENTS;
 my %WatchList;
 my %Mail;
 my %Events;
@@ -39,6 +37,30 @@ my %formats = (
   'd' => sub { POSIX::strftime($_[0], localtime) },
   'f' => sub { $Filename }
 );
+my %InotifyEvents = (
+  'access' => IN_ACCESS,
+  'modify' => IN_MODIFY,
+  'attrib' => IN_ATTRIB,
+  'close_write' => IN_CLOSE_WRITE,
+  'close_nowrite' => IN_CLOSE_NOWRITE,
+  'open' => IN_OPEN,
+  'moved_from' => IN_MOVED_FROM,
+  'moved_to' => IN_MOVED_TO,
+  'create' => IN_CREATE,
+  'delete' => IN_DELETE,
+  'delete_self' => IN_DELETE_SELF,
+  'move_self' => IN_MOVE_SELF,
+  'unmount' => IN_UNMOUNT,
+  'q_overflow' => IN_Q_OVERFLOW,
+  'ignored' => IN_IGNORED,
+  'close' => IN_CLOSE,
+  'move' => IN_MOVE,
+  'isdir' => IN_ISDIR,
+  'oneshot' => IN_ONESHOT,
+  'all_events' => IN_ALL_EVENTS,
+  'default' => IN_CLOSE_WRITE|IN_CREATE|IN_DELETE|IN_MOVE|IN_DELETE_SELF|IN_MOVE_SELF,
+);
+
 getopts("c:dv",\%options);
 
 $CONFIGFILE = $options{c} if defined $options{c};
@@ -72,7 +94,20 @@ foreach my $watchpoint (@{$config->{watchlist}}) {
       (defined($path->{alert}) && $path->{alert} eq "off") ? 0:1;
 
     print "$path->{content} : $watchpoint->{contactpoint}->{email}\n" if($DEBUG);
-    pathwatch($path->{type},$path->{content});
+    our $mask;
+    $mask = ($path->{type} eq "recursive") ? $InotifyEvents{'create'} : 0;
+    if(!defined($path->{'events'})) {
+      $mask = $InotifyEvents{'default'}; 
+    }
+    else {
+      foreach my $event ( split(',',$path->{'events'})) {
+        $event =~ s/\s//g;
+        warn "Event $event doesn't not exist!" if (!defined($InotifyEvents{$event}));
+        $mask = $mask | $InotifyEvents{$event};
+      }
+    }
+    $WatchList{$path->{type}}{$path->{content}}{"mask"} = $mask;
+    pathwatch($path->{type},$path->{content},$mask);
   }
 }
 
@@ -81,11 +116,12 @@ $Mail{From} = $config->{guard}->{email};
 Event::loop;
 
 sub pathwatch {
+  our $mask;
   my ($mode,$path) = @_;
   if(-e "$path") {
     if($mode eq "single") {
       print "Watch $path\n" if($DEBUG);
-      $inotify->watch ("$path", $WATCHMASK, \&mywatch);
+      $inotify->watch ("$path", $mask, \&mywatch);
     }
     elsif($mode eq "recursive") {
       File::Find::find({wanted => \&wanted}, "$path");
@@ -94,9 +130,10 @@ sub pathwatch {
 }
 
 sub wanted {
+  our $mask;
   if(-d $File::Find::name) {
     print "Watch $File::Find::name\n" if($DEBUG);
-    $inotify->watch ("$File::Find::name", $WATCHMASK, \&mywatch);
+    $inotify->watch ("$File::Find::name", $mask, \&mywatch);
   }
 }
 
@@ -125,7 +162,7 @@ sub mywatch {
   undef $Mail{Message};
   if($e->IN_CREATE && -d $Filename) {
     print "Dir $Filename is watched\n" if($DEBUG);
-    $inotify->watch ($Filename, $WATCHMASK, \&mywatch);
+    $inotify->watch ($Filename, $Path->{'mask'}, \&mywatch);
   }
   elsif($e->IN_CLOSE_WRITE && -f $Filename) {
     my $Message = "$PROGRAM: $Filename";
@@ -156,7 +193,7 @@ sub mywatch {
     my $Message = "$PROGRAM: $Filename";
     $Mail{Message} = $Message;
     $Mail{Subject} = "$PROGRAM:" . hostname() . ":Replaced:$Filename";
-    $inotify->watch ("$Filename", $WATCHMASK, \&mywatch);
+    $inotify->watch ("$Filename", $Path->{'mask'}, \&mywatch);
     print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
   }
   if(defined($Path->{exec})) {
