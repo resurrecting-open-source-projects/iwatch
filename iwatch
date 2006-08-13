@@ -22,6 +22,7 @@ my $PROGRAM = "iWatch";
 my $VERSION = "0.0.4";
 my $DEBUG = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
+my $config;
 my %WatchList;
 my %Mail;
 my %Events;
@@ -29,6 +30,7 @@ my $Filename;
 sub wanted;
 sub mywatch;
 sub pathwatch;
+sub getMask;
 
 my %options=();
 my %formats = (
@@ -60,19 +62,46 @@ my %InotifyEvents = (
   'all_events' => IN_ALL_EVENTS,
   'default' => IN_CLOSE_WRITE|IN_CREATE|IN_DELETE|IN_MOVE|IN_DELETE_SELF|IN_MOVE_SELF,
 );
+my %InotifyEventNames;
+foreach my $EventName (keys %InotifyEvents) {
+  $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
+}
 
-getopts("c:dv",\%options);
+getopts("c:dve:rw:x:",\%options);
 
-$CONFIGFILE = $options{c} if defined $options{c};
+$CONFIGFILE = $options{c} if(defined $options{c});
 $DEBUG = 1 if defined $options{v};
 delete @ENV{qw(ENV IFS CDPATH)};
 $ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
-my $config = XMLin($CONFIGFILE, ForceArray => ['path','watchlist']);
+if((defined $options{c} || defined $options{d}) && 
+   (defined $options{e} || defined $options{r} || defined $options{w} || defined $options{x})) {
+     print "Options [c|d] and [e|r|w|x] are mutually exlusive, you can't mix it!\n";
+     exit 1;
+   }
+
+if(defined $options{w}) {
+  $DEBUG = 1;
+  $config->{watchlist}[0]->{path}[0]->{content} = $options{w};
+  $config->{watchlist}[0]->{path}[0]->{events} = 
+    (defined $options{e}) ? $options{e} : "default";
+  $config->{watchlist}[0]->{path}[0]->{type} = 
+    (defined $options{r}) ? "recursive" : "single";
+  $config->{watchlist}[0]->{path}[0]->{alert} = "off";
+  if(defined $options{x}) {
+    $config->{watchlist}[0]->{path}[1]->{content} = $options{x};
+    $config->{watchlist}[0]->{path}[1]->{type} = "exception";
+  }
+}
+else {
+  $config = XMLin($CONFIGFILE, ForceArray => ['path','watchlist']);
+}
+
+#print Dumper($config);
 
 if(defined $options{d}) {
   my $ChildPid = fork;
-  die "cannot fork: $!\n" if(!defined $ChildPid);
+  die "Can't fork: $!\n" if(!defined $ChildPid);
   exit if($ChildPid);
 
   POSIX::setsid() or die "Can't start a new session: $!";
@@ -88,32 +117,49 @@ Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
 
 foreach my $watchpoint (@{$config->{watchlist}}) {
   foreach my $path (@{$watchpoint->{path}}) {
+    next if($path->{type} ne "exception");
+  	if(-d $path->{content}) { $path->{content} =~ s/\/$//;};
+  	$WatchList{$path->{type}}{$path->{content}}{"type"} =  $path->{type};
+  }
+}
+
+foreach my $watchpoint (@{$config->{watchlist}}) {
+  foreach my $path (@{$watchpoint->{path}}) {
+  	next if($path->{type} eq "exception");
+  	if(-d $path->{content}) { $path->{content} =~ s/\/$//;};
     $WatchList{$path->{type}}{$path->{content}}{"contactpoint"} = $watchpoint->{contactpoint}->{email};
     $WatchList{$path->{type}}{$path->{content}}{"exec"} = $path->{exec} if(defined($path->{exec}));
     $WatchList{$path->{type}}{$path->{content}}{"alert"} = 
       (defined($path->{alert}) && $path->{alert} eq "off") ? 0:1;
+    $WatchList{$path->{type}}{$path->{content}}{"type"} =  $path->{type};
 
-    print "$path->{content} : $watchpoint->{contactpoint}->{email}\n" if($DEBUG);
     our $mask;
-    $mask = ($path->{type} eq "recursive") ? $InotifyEvents{'create'} : 0;
     if(!defined($path->{'events'})) {
       $mask = $InotifyEvents{'default'}; 
     }
     else {
-      foreach my $event ( split(',',$path->{'events'})) {
-        $event =~ s/\s//g;
-        warn "Event $event doesn't not exist!" if (!defined($InotifyEvents{$event}));
-        $mask = $mask | $InotifyEvents{$event};
-      }
+      $mask = getMask($path->{'events'});
+      $mask = $mask | $InotifyEvents{'create'} if($path->{type} eq "recursive");
     }
     $WatchList{$path->{type}}{$path->{content}}{"mask"} = $mask;
-    pathwatch($path->{type},$path->{content},$mask);
+    pathwatch($path->{type},$path->{content});
   }
 }
 
 $Mail{From} = $config->{guard}->{email};
 
 Event::loop;
+
+sub getMask {
+  my ($events) = @_;
+  my $mask = 0;
+  foreach my $event ( split(',',$events)) {
+    $event =~ s/\s//g;
+    warn "Event $event doesn't not exist!" if (!defined($InotifyEvents{$event}));
+    $mask = $mask | $InotifyEvents{$event};
+  }
+  return $mask;
+}
 
 sub pathwatch {
   our $mask;
@@ -132,6 +178,7 @@ sub pathwatch {
 sub wanted {
   our $mask;
   if(-d $File::Find::name) {
+  	return if(!defined(getWatchList($File::Find::name)));
     print "Watch $File::Find::name\n" if($DEBUG);
     $inotify->watch ("$File::Find::name", $mask, \&mywatch);
   }
@@ -139,7 +186,6 @@ sub wanted {
 
 sub getWatchList {
   my ($path) = @_;
-  print "Path: $path\n" if($DEBUG);
   return undef if($WatchList{"exception"}{$path});
   foreach my $key (keys %{$WatchList{"exception"}}) {
     return undef if("$path" =~ /^$key/);
@@ -155,26 +201,34 @@ sub getWatchList {
 sub mywatch {
   my $e = shift;
   $Filename = $e->fullname;
-  printf ("events for <%s> received: %x\n", $Filename, $e->mask) if($DEBUG);
   return if(defined $WatchList{"exception"}{$Filename});
   my $Path = getWatchList($e->{w}->{name});
   return if(!defined($Path));
+  
+  if($DEBUG) {
+  	my $mask = $e->mask;
+  	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR);printf "IN_ISDIR,";}
+  	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT);printf "IN_ONESHOT";}
+  	printf "$InotifyEventNames{$mask} $Filename\n",$e->mask;
+  }
+  
   undef $Mail{Message};
-  if($e->IN_CREATE && -d $Filename) {
-    print "Dir $Filename is watched\n" if($DEBUG);
+  
+  if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
+    print STDERR "* Directory $Filename is watched\n" if($DEBUG);
     $inotify->watch ($Filename, $Path->{'mask'}, \&mywatch);
   }
   elsif($e->IN_CLOSE_WRITE && -f $Filename) {
     my $Message = "$PROGRAM: $Filename";
     $Mail{Message} = $Message;
     $Mail{Subject} = "$PROGRAM:" . hostname() . ":Change:$Filename";  
-    print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
+    print STDERR "* $Filename is closed\n" if($DEBUG);
   }
   elsif($e->IN_DELETE) {
     my $Message = "";
     $Mail{Message} = $Message;
     $Mail{Subject} = "$PROGRAM:" . hostname() . ":Delete:$Filename";
-    print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
+    print STDERR "* $Filename is deleted\n" if($DEBUG);
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
     if($e->IN_MOVED_FROM) {
@@ -184,25 +238,25 @@ sub mywatch {
       my $FileMove = $Events{$e->{cookie}} . ":$Filename";
       $Mail{Message} = "$PROGRAM:$FileMove";
       $Mail{Subject} = "$PROGRAM:" . hostname() . ":Move:$FileMove";
-      print "to: $Path->{'contactpoint'} : Move from " . $Events{$e->{cookie}} . " to $Filename\n" if($DEBUG);
+      print STDERR "* $Events{$e->{cookie}} is moved to $Filename\n" if($DEBUG);
       undef $Events{$e->{cookie}};
     }
   }
   elsif($e->IN_DELETE_SELF && -f $Filename && defined $WatchList{$Filename}) {
-    print "rewatch: $Filename\n" if($DEBUG);
     my $Message = "$PROGRAM: $Filename";
     $Mail{Message} = $Message;
     $Mail{Subject} = "$PROGRAM:" . hostname() . ":Replaced:$Filename";
     $inotify->watch ("$Filename", $Path->{'mask'}, \&mywatch);
-    print "to: $Path->{'contactpoint'} : $Message\n" if($DEBUG);
+    print STDERR "* $Filename is rewatched\n" if($DEBUG);
   }
   if(defined($Path->{exec})) {
     my $command = stringf("$Path->{exec}",%formats);
-    print "Command: $command\n" if($DEBUG);
+    print STDERR "* Command: $command\n" if($DEBUG);
     system ("$command");
   }
   if(defined($Mail{Message}) && $Path->{'alert'}) {
     $Mail{To} = $Path->{'contactpoint'};
+    print STDERR "* Send email to $Mail{To}\n" if($DEBUG);
     sendmail(%Mail) or warn $Mail::Sendmail::error;
   }
 };
