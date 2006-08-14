@@ -28,4 +28,12 @@ Don't forget to set the correct email address here
     <path type="recursive">/etc/mail</path>
     <path type="exception">/etc/mail/statistics</path>
   </watchlist>
+  <watchlist>
+    <title>Only Test</title>
+    <contactpoint email="root@localhost" name="Administrator"></contactpoint>
+    <path type="single" alert="off" exec="(w;ps)|mail -s %f root@localhost">/tmp/dir1</path>
+    <path type="single" events="access,close" alert="off" exec="(w;ps)|mail -s %f root@localhost">/tmp/dir2</path>
+    <path type="single" events="default,access" alert="off" exec="(w;ps)|mail -s '%f is accessed at %{%H:%M:%S}d' root@localhost">/tmp/dir3</path>
+    <path type="single" events="all_events" alert="off">/tmp/dir4</path>
+  </watchlist>
 </config>

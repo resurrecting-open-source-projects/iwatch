@@ -10,16 +10,16 @@ use strict;
 use Getopt::Std;
 use Event;
 use Linux::Inotify2;
-use File::Find ();
+use File::Find;
 use Mail::Sendmail;
 use Sys::Hostname;
 use XML::Simple;
 use POSIX;
 use String::Format;
-use Data::Dumper;
+#use Data::Dumper;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.0.4";
+my $VERSION = "0.0.5";
 my $DEBUG = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $config;
@@ -67,7 +67,7 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-getopts("f:dve:c:m:rw:x:",\%options);
+getopts("vdf:c:e:m:rw:x:",\%options);
 
 $CONFIGFILE = $options{f} if(defined $options{f});
 $DEBUG = 1 if defined $options{v};
@@ -220,9 +220,10 @@ sub mywatch {
   
   if($DEBUG) {
   	my $mask = $e->mask;
-  	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR, ";}
-  	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT, ";}
-  	$Message = "$Message$InotifyEventNames{$mask} $Filename";
+  	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR";}
+  	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT";}
+	$Message = (defined $Message) ? "$Message,$InotifyEventNames{$mask} $Filename" : 
+	  "$InotifyEventNames{$mask} $Filename";
   	print "$Message\n";
   	$Mail{Subject} = "[$PROGRAM] " . hostname() . ": $InotifyEventNames{$mask} $Filename";  
   }
@@ -271,7 +272,6 @@ sub mywatch {
     system ("$command");
   }
   if(defined($Message) && $Path->{'alert'}) {
-    print Dumper($Path);
     $Mail{Message} = $Message;
     $Mail{To} = $Path->{'contactpoint'};
     print STDERR "* Send email to $Mail{To}\n" if($DEBUG);
