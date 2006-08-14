@@ -16,7 +16,7 @@ use Sys::Hostname;
 use XML::Simple;
 use POSIX;
 use String::Format;
-#use Data::Dumper;
+use Data::Dumper;
 
 my $PROGRAM = "iWatch";
 my $VERSION = "0.0.4";
@@ -67,27 +67,38 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-getopts("c:dve:rw:x:",\%options);
+getopts("f:dve:c:m:rw:x:",\%options);
 
-$CONFIGFILE = $options{c} if(defined $options{c});
+$CONFIGFILE = $options{f} if(defined $options{f});
 $DEBUG = 1 if defined $options{v};
 delete @ENV{qw(ENV IFS CDPATH)};
 $ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
-if((defined $options{c} || defined $options{d}) && 
-   (defined $options{e} || defined $options{r} || defined $options{w} || defined $options{x})) {
-     print "Options [c|d] and [e|r|w|x] are mutually exlusive, you can't mix it!\n";
+if((defined $options{f} || defined $options{d}) && 
+   (defined $options{c} || defined $options{e} || defined $options{m} 
+     || defined $options{r} || defined $options{w} || defined $options{x})) {
+     print "Options [f|d] and [c|e|m|r|w|x] are mutually exlusive, you can't mix it!\n";
      exit 1;
    }
 
 if(defined $options{w}) {
   $DEBUG = 1;
+  $config->{guard}->{email} = (getpwuid($>))[0] . "\@localhost";
   $config->{watchlist}[0]->{path}[0]->{content} = $options{w};
   $config->{watchlist}[0]->{path}[0]->{events} = 
     (defined $options{e}) ? $options{e} : "default";
   $config->{watchlist}[0]->{path}[0]->{type} = 
     (defined $options{r}) ? "recursive" : "single";
-  $config->{watchlist}[0]->{path}[0]->{alert} = "off";
+  if(defined $options{c}) {
+  	$config->{watchlist}[0]->{path}[0]->{exec} = $options{c};
+  }
+  if(defined $options{m}) {
+  	$config->{watchlist}[0]->{path}[0]->{alert} = 1;
+  	$config->{watchlist}[0]->{contactpoint}->{email} = $options{m};
+  }
+  else {
+  	$config->{watchlist}[0]->{path}[0]->{alert} = 0;
+  }
   if(defined $options{x}) {
     $config->{watchlist}[0]->{path}[1]->{content} = $options{x};
     $config->{watchlist}[0]->{path}[1]->{type} = "exception";
@@ -200,6 +211,8 @@ sub getWatchList {
 
 sub mywatch {
   my $e = shift;
+  my $Message;
+  my $localMessage;
   $Filename = $e->fullname;
   return if(defined $WatchList{"exception"}{$Filename});
   my $Path = getWatchList($e->{w}->{name});
@@ -207,28 +220,28 @@ sub mywatch {
   
   if($DEBUG) {
   	my $mask = $e->mask;
-  	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR);printf "IN_ISDIR,";}
-  	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT);printf "IN_ONESHOT";}
-  	printf "$InotifyEventNames{$mask} $Filename\n",$e->mask;
+  	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR,";}
+  	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT";}
+  	$Message = "$Message $InotifyEventNames{$mask} $Filename";
+  	print "$Message\n";
+  	$Mail{Subject} = "[$PROGRAM] " . hostname() . "$InotifyEventNames{$mask} $Filename";  
   }
-  
-  undef $Mail{Message};
-  
+
   if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
     print STDERR "* Directory $Filename is watched\n" if($DEBUG);
     $inotify->watch ($Filename, $Path->{'mask'}, \&mywatch);
   }
   elsif($e->IN_CLOSE_WRITE && -f $Filename) {
-    my $Message = "$PROGRAM: $Filename";
-    $Mail{Message} = $Message;
-    $Mail{Subject} = "$PROGRAM:" . hostname() . ":Change:$Filename";  
-    print STDERR "* $Filename is closed\n" if($DEBUG);
+  	$localMessage = "* $Filename is closed\n";
+    $Message = "$Message\n$localMessage";
+    $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is changed";  
+    print STDERR $localMessage if($DEBUG);
   }
   elsif($e->IN_DELETE) {
-    my $Message = "";
-    $Mail{Message} = $Message;
-    $Mail{Subject} = "$PROGRAM:" . hostname() . ":Delete:$Filename";
-    print STDERR "* $Filename is deleted\n" if($DEBUG);
+    $localMessage = "* $Filename is deleted\n";
+    $Message = "$Message\n$localMessage";
+    $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is deleted";  
+    print STDERR $localMessage if($DEBUG);
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
     if($e->IN_MOVED_FROM) {
@@ -236,25 +249,29 @@ sub mywatch {
     }
     elsif($e->IN_MOVED_TO) {
       my $FileMove = $Events{$e->{cookie}} . ":$Filename";
-      $Mail{Message} = "$PROGRAM:$FileMove";
-      $Mail{Subject} = "$PROGRAM:" . hostname() . ":Move:$FileMove";
-      print STDERR "* $Events{$e->{cookie}} is moved to $Filename\n" if($DEBUG);
+      
+      $localMessage = "* $Events{$e->{cookie}} is moved to $Filename\n";
+      $Message = "$Message\n$localMessage";
+      $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is moved";  
+      print STDERR $localMessage if($DEBUG);
       undef $Events{$e->{cookie}};
     }
   }
   elsif($e->IN_DELETE_SELF && -f $Filename && defined $WatchList{$Filename}) {
-    my $Message = "$PROGRAM: $Filename";
-    $Mail{Message} = $Message;
-    $Mail{Subject} = "$PROGRAM:" . hostname() . ":Replaced:$Filename";
+  	
+  	$localMessage = "* $Filename is replaced but watched again\n";
+    $Message = "$Message\n$localMessage";
+    $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is replaced";  
+    print STDERR $localMessage if($DEBUG);
     $inotify->watch ("$Filename", $Path->{'mask'}, \&mywatch);
-    print STDERR "* $Filename is rewatched\n" if($DEBUG);
   }
   if(defined($Path->{exec})) {
     my $command = stringf("$Path->{exec}",%formats);
     print STDERR "* Command: $command\n" if($DEBUG);
     system ("$command");
   }
-  if(defined($Mail{Message}) && $Path->{'alert'}) {
+  if(defined($Message) && $Path->{'alert'}) {
+    $Mail{Message} = $Message;
     $Mail{To} = $Path->{'contactpoint'};
     print STDERR "* Send email to $Mail{To}\n" if($DEBUG);
     sendmail(%Mail) or warn $Mail::Sendmail::error;
