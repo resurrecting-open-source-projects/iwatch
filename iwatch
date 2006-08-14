@@ -93,11 +93,11 @@ if(defined $options{w}) {
   	$config->{watchlist}[0]->{path}[0]->{exec} = $options{c};
   }
   if(defined $options{m}) {
-  	$config->{watchlist}[0]->{path}[0]->{alert} = 1;
+  	$config->{watchlist}[0]->{path}[0]->{alert} = "on";
   	$config->{watchlist}[0]->{contactpoint}->{email} = $options{m};
   }
   else {
-  	$config->{watchlist}[0]->{path}[0]->{alert} = 0;
+  	$config->{watchlist}[0]->{path}[0]->{alert} = "off";
   }
   if(defined $options{x}) {
     $config->{watchlist}[0]->{path}[1]->{content} = $options{x};
@@ -220,11 +220,11 @@ sub mywatch {
   
   if($DEBUG) {
   	my $mask = $e->mask;
-  	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR,";}
-  	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT";}
-  	$Message = "$Message $InotifyEventNames{$mask} $Filename";
+  	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR, ";}
+  	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT, ";}
+  	$Message = "$Message$InotifyEventNames{$mask} $Filename";
   	print "$Message\n";
-  	$Mail{Subject} = "[$PROGRAM] " . hostname() . "$InotifyEventNames{$mask} $Filename";  
+  	$Mail{Subject} = "[$PROGRAM] " . hostname() . ": $InotifyEventNames{$mask} $Filename";  
   }
 
   if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
@@ -252,7 +252,7 @@ sub mywatch {
       
       $localMessage = "* $Events{$e->{cookie}} is moved to $Filename\n";
       $Message = "$Message\n$localMessage";
-      $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is moved";  
+      $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Events{$e->{cookie}} is moved to $Filename";  
       print STDERR $localMessage if($DEBUG);
       undef $Events{$e->{cookie}};
     }
@@ -271,6 +271,7 @@ sub mywatch {
     system ("$command");
   }
   if(defined($Message) && $Path->{'alert'}) {
+    print Dumper($Path);
     $Mail{Message} = $Message;
     $Mail{To} = $Path->{'contactpoint'};
     print STDERR "* Send email to $Mail{To}\n" if($DEBUG);
