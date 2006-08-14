@@ -1,7 +1,10 @@
 #!/usr/bin/perl
 # iWatch
 # By Cahya Wirawan <cahya at gmx dot at>
-# Usage: iwatch [-c <configfile.xml>] [-v] [-d]
+# Usage in daemon mode: 
+# iwatch [-f <configfile.xml>] [-d] [-v]
+# Usage in command line mode:
+# iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception]
 # iWatch monitor any changes in directories/files specified
 # in the configuration file, and send email alert.
 # This program needs inotify in linux kernel >= 2.6.13  
@@ -27,6 +30,7 @@ my %WatchList;
 my %Mail;
 my %Events;
 my $Filename;
+sub Usage;
 sub wanted;
 sub mywatch;
 sub pathwatch;
@@ -67,7 +71,12 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-getopts("vdf:c:e:m:rw:x:",\%options);
+getopts("vhdf:c:e:m:rw:x:",\%options);
+
+if(defined $options{h}) {
+  Usage();
+  exit 1;
+}
 
 $CONFIGFILE = $options{f} if(defined $options{f});
 $DEBUG = 1 if defined $options{v};
@@ -277,5 +286,23 @@ sub mywatch {
     print STDERR "* Send email to $Mail{To}\n" if($DEBUG);
     sendmail(%Mail) or warn $Mail::Sendmail::error;
   }
-};
+}
 
+sub Usage {
+  print <<EOH;
+In the daemon mode iWatch has following options:
+Usage: iwatch [-d] [-f <config file>] [-v]
+  -d Execute the application as daemon.
+  -f Specify an alternate xml configuration file.
+  -v verbose mode.
+
+In the command line mode:
+Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception]
+  -c You can specify a command to be executed if an event occurs.
+  -e Events list.
+  -m Contact point's email address.
+  -r Recursivity of the watched directory.
+  -w The watched directory
+  -x The exception (file or directory).
+EOH
+}
