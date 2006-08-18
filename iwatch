@@ -18,6 +18,7 @@ use Mail::Sendmail;
 use Sys::Hostname;
 use XML::Simple;
 use POSIX;
+use Sys::Syslog;
 #use Data::Dumper;
 
 my $PROGRAM = "iWatch";
@@ -77,6 +78,7 @@ if(defined $options{h} || $opt == 0) {
   exit 1;
 }
 
+openlog("$PROGRAM", 'cons,pid', 'user');
 $CONFIGFILE = $options{f} if(defined $options{f});
 $DEBUG = 1 if defined $options{v};
 delete @ENV{qw(ENV IFS CDPATH)};
@@ -191,6 +193,7 @@ sub pathwatch {
   if(-e "$path") {
     if($mode eq "single") {
       print "Watch $path\n" if($DEBUG);
+      syslog("info","Watch $path");
       $inotify->watch ("$path", $mask, \&mywatch);
     }
     elsif($mode eq "recursive") {
@@ -204,6 +207,7 @@ sub wanted {
   if(-d $File::Find::name) {
   	return if(!defined(getWatchList($File::Find::name)));
     print "Watch $File::Find::name\n" if($DEBUG);
+    syslog("info","Watch $File::Find::name");
     $inotify->watch ("$File::Find::name", $mask, \&mywatch);
   }
 }
@@ -238,11 +242,13 @@ sub mywatch {
 	$Message = (defined $Message) ? "$Message,$InotifyEventNames{$mask} $Filename" : 
 	  "$InotifyEventNames{$mask} $Filename";
   	print "$Message\n";
+	syslog("info","$Message");
   	$Mail{Subject} = "[$PROGRAM] " . hostname() . ": $InotifyEventNames{$mask} $Filename";  
   }
 
   if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
     print STDERR "* Directory $Filename is watched\n" if($DEBUG);
+    syslog("info","* Directory $Filename is watched");
     $inotify->watch ($Filename, $Path->{'mask'}, \&mywatch);
   }
   elsif($e->IN_CLOSE_WRITE && -f $Filename) {
@@ -250,12 +256,14 @@ sub mywatch {
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is changed";  
     print STDERR $localMessage if($DEBUG);
+    syslog("info","$localMessage");
   }
   elsif($e->IN_DELETE) {
     $localMessage = "* $Filename is deleted\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is deleted";  
     print STDERR $localMessage if($DEBUG);
+    syslog("info","$localMessage");
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
     if($e->IN_MOVED_FROM) {
@@ -268,6 +276,7 @@ sub mywatch {
       $Message = "$Message\n$localMessage";
       $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Events{$e->{cookie}} is moved to $Filename";  
       print STDERR $localMessage if($DEBUG);
+      syslog("info","$localMessage");
       undef $Events{$e->{cookie}};
     }
   }
@@ -277,17 +286,20 @@ sub mywatch {
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is replaced";  
     print STDERR $localMessage if($DEBUG);
+    syslog("info","$localMessage");
     $inotify->watch ("$Filename", $Path->{'mask'}, \&mywatch);
   }
   if(defined($Path->{exec})) {
     my $command = stringf("$Path->{exec}",%formats);
     print STDERR "* Command: $command\n" if($DEBUG);
+    syslog("info","* Command: $command");
     system ("$command");
   }
   if(defined($Message) && $Path->{'alert'}) {
     $Mail{Message} = $Message;
     $Mail{To} = $Path->{'contactpoint'};
     print STDERR "* Send email to $Mail{To}\n" if($DEBUG);
+    syslog("info","* Send email to $Mail{To}");
     sendmail(%Mail) or warn $Mail::Sendmail::error;
   }
 }
