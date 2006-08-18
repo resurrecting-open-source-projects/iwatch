@@ -1,6 +1,5 @@
 iWatch: Realtime filesystem monitor
-
-Author: Cahya Wirawan.
+By Cahya Wirawan <cahya at gmx dot at>.
 
 iWatch is a realtime filesystem monitoring program. Its purpose is to monitor 
 any changes in a specific directory or file and send email notification 
@@ -49,9 +48,6 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [
   -c You can specify a command to be executed if an event occurs. And you can use
      following special string format in the command:
      %f Full path of the filename that gets an event.
-     %d Date string format, example: "%{%H:%M:%S}d" is for "Hour:Minute:Second" and could have
-        an output like "15:53:12". Please refer to strftime man page for a complete list
-	of possible time format.
      %p Program name (iWatch)
      %v Version number
   -e Events list. Following is the possible events you can use:
@@ -105,7 +101,7 @@ example of config file:
     <contactpoint email="root@localhost" name="Administrator"></contactpoint>
     <path type="single" alert="off" exec="(w;ps -ef)|mail -s %f root@localhost">/tmp/dir1</path>
     <path type="single" events="access,close" alert="off" exec="(w;ps -ef)|mail -s %f root@localhost">/tmp/dir2</path>
-    <path type="single" events="default,access" alert="off" exec="(w;ps -ef)|mail -s '%f is accessed at %{%H:%M:%S}d' root@localhost">/tmp/dir3</path>
+    <path type="single" events="default,access" alert="off" exec="(w;ps -ef)|mail -s '%f is accessed' root@localhost">/tmp/dir3</path>
     <path type="single" events="all_events" alert="off">/tmp/dir4</path>
   </watchlist>
 </config>
@@ -127,5 +123,5 @@ iwatch -w /etc -r -e access,create -m cahya@localhost -x /etc/mail
   monitor only access and create events in /etc directory recursively
   with /etc/mail as exception and send email notification to cahya@localhost.
 
-iwatch -w /bin -r -c "(w;ps -ef)|mail -s '%{%H:%M:%S}d: %f was changed' cahya@localhost" 
+iwatch -w /bin -r -c "(w;ps -ef)|mail -s '%f was changed' cahya@localhost" 
   monitor /bin directory recursively and execute the command.

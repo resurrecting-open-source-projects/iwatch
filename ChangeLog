@@ -1,23 +1,26 @@
 iWatch: Realtime filesystem monitor
 
+version 0.0.6 (18. August 2006):
+* Changes/fixes:
+  - Remove dependency to the module String::Format,
+  - Remove date string format.
+  - Add option 'h' for usage/help.
+
 version 0.0.5 (14. August 2006):
-	Status System:
-	* New Features:
-	  - Separate the command in to daemon mode and command line mode.
-	  - You can specify a command to be executed if an event occurs
-	  - You can specify difference events you want to watch.
-	  - You can enable/disable email notification.
+* New Features:
+  - Separate the command in to daemon mode and command line mode.
+  - You can specify a command to be executed if an event occurs
+  - You can specify difference events you want to watch.
+  - You can enable/disable email notification.
 
 version 0.0.4 (10. August 2006):
-	My Cat Simba ate this version.
+* My Cat Simba ate this version.
 	
 version 0.0.3 (7. August 2006):
-	Status System:
-	* Fixes.
+* Fixes.
 
 version 0.0.2 (6. August 2006):
-	Status System:
-	* First release in sourceforge and few fixes.
+* First release in sourceforge and few fixes.
 	
 version 0.0.1 (14. October 2005):
-	* The very very first test release in enemy.org :)
+* The very very first test release in enemy.org :)

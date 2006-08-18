@@ -18,11 +18,10 @@ use Mail::Sendmail;
 use Sys::Hostname;
 use XML::Simple;
 use POSIX;
-use String::Format;
 #use Data::Dumper;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.0.5";
+my $VERSION = "0.0.6";
 my $DEBUG = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $config;
@@ -35,12 +34,12 @@ sub wanted;
 sub mywatch;
 sub pathwatch;
 sub getMask;
+sub stringf;
 
 my %options=();
 my %formats = (
-  'p' => $PROGRAM,
-  'v' => $VERSION,
-  'd' => sub { POSIX::strftime($_[0], localtime) },
+  'p' => sub { $PROGRAM },
+  'v' => sub { $VERSION },
   'f' => sub { $Filename }
 );
 my %InotifyEvents = (
@@ -71,9 +70,9 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-getopts("vhdf:c:e:m:rw:x:",\%options);
+my $opt = getopts("vhdf:c:e:m:rw:x:",\%options);
 
-if(defined $options{h}) {
+if(defined $options{h} || $opt == 0) {
   Usage();
   exit 1;
 }
@@ -83,10 +82,11 @@ $DEBUG = 1 if defined $options{v};
 delete @ENV{qw(ENV IFS CDPATH)};
 $ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
-if((defined $options{f} || defined $options{d}) && 
+if((defined $options{f} || defined $options{d} || defined $options{F}) && 
    (defined $options{c} || defined $options{e} || defined $options{m} 
      || defined $options{r} || defined $options{w} || defined $options{x})) {
-     print "Options [f|d] and [c|e|m|r|w|x] are mutually exlusive, you can't mix it!\n";
+     print STDERR "Options [f|d] and [c|e|m|r|w|x] are mutually exlusive, you can't mix it!\n";
+     Usage();
      exit 1;
    }
 
@@ -114,6 +114,10 @@ if(defined $options{w}) {
   }
 }
 else {
+  if(! -f $CONFIGFILE) {
+    Usage();
+  	exit 1;
+  }
   $config = XMLin($CONFIGFILE, ForceArray => ['path','watchlist']);
 }
 
@@ -288,15 +292,30 @@ sub mywatch {
   }
 }
 
+sub stringf() {
+  my $ind;
+  my ($string,%format) = @_;
+  foreach my $key (keys %format) {
+    $ind = index $string,"%$key";
+    next if($ind == -1);
+    substr($string,$ind,2) = &{$format{$key}};
+    $string = stringf($string,%format);
+  }
+  $string;
+}
+
 sub Usage {
-  print <<EOH;
-In the daemon mode iWatch has following options:
+  print <<ENDOFHELP;
+$PROGRAM $VERSION, a realtime filesystem monitor.
+Cahya Wirawan <cahya at gmx dot at>, Vienna 2006.
+
+In the daemon mode, $PROGRAM has following options:
 Usage: iwatch [-d] [-f <config file>] [-v]
   -d Execute the application as daemon.
   -f Specify an alternate xml configuration file.
   -v verbose mode.
 
-In the command line mode:
+And in the command line mode:
 Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception]
   -c You can specify a command to be executed if an event occurs.
   -e Events list.
@@ -304,5 +323,5 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [
   -r Recursivity of the watched directory.
   -w The watched directory
   -x The exception (file or directory).
-EOH
+ENDOFHELP
 }
