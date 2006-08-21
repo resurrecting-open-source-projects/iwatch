@@ -44,7 +44,8 @@ Usage: iwatch [-d] [-f <config file>] [-v]
   -v verbose mode.
 
 In the command line mode iWatch has following options:
-Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception]
+Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception] <target>
+  Target is the directory or file you want to monitor.
   -c You can specify a command to be executed if an event occurs. And you can use
      following special string format in the command:
      %f Full path of the filename that gets an event.
@@ -74,7 +75,8 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [
   -m Contact point's email address. Without this option, iwatch will not send 
      any email notification (obviously).
   -r Recursivity of the watched directory.
-  -w The watched directory
+  -s Enable report to the syslog.
+  -w The watched directory (Deprecated)
   -x The exception (file or directory).
 
 example of config file: 
@@ -85,7 +87,7 @@ example of config file:
     <title>Public Website</title>
     <contactpoint email="webmaster@localhost" name="Web Master"></contactpoint>
     <path type="single">/var/www/localhost/htdocs</path>
-    <path type="single">/var/www/localhost/htdocs/About</path>
+    <path type="single" syslog="on">/var/www/localhost/htdocs/About</path>
     <path type="recursive">/var/www/localhost/htdocs/Photos</path>
   </watchlist>
   <watchlist>
@@ -116,10 +118,10 @@ a file or subdirectory inside the monitored directory.
 
 Example of the command line mode:
 
-iwatch -w /tmp 
+iwatch /tmp 
   monitor changes in /tmp direcotory with default events
 
-iwatch -w /etc -r -e access,create -m cahya@localhost -x /etc/mail 
+iwatch -r -e access,create -m cahya@localhost -x /etc/mail /etc
   monitor only access and create events in /etc directory recursively
   with /etc/mail as exception and send email notification to cahya@localhost.
 
