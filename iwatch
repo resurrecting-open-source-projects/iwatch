@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -T
 # iWatch
 # By Cahya Wirawan <cahya at gmx dot at>
 # Usage in daemon mode: 
@@ -22,7 +22,7 @@ use Sys::Syslog;
 #use Data::Dumper;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.0.7";
+my $VERSION = "0.0.8";
 my $DEBUG = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $config;
@@ -39,9 +39,12 @@ sub stringf;
 
 my %options=();
 my %formats = (
-  'p' => sub { $PROGRAM },
-  'v' => sub { $VERSION },
-  'f' => sub { $Filename }
+  'p' => sub { "$PROGRAM" },
+  'v' => sub { "$VERSION" },
+  'f' => sub { 
+  	$Filename =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" \\])/\\$1/g; 
+  	"$Filename"; 
+  }
 );
 my %InotifyEvents = (
   'access' => IN_ACCESS,
@@ -71,7 +74,7 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-my $opt = getopts("vhdf:c:e:m:rw:x:",\%options);
+my $opt = getopts("vhdf:c:e:m:rsw:x:",\%options);
 
 if(defined $options{h} || $opt == 0) {
   Usage();
@@ -85,17 +88,17 @@ delete @ENV{qw(ENV IFS CDPATH)};
 $ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
 if((defined $options{f} || defined $options{d} || defined $options{F}) && 
-   (defined $options{c} || defined $options{e} || defined $options{m} 
-     || defined $options{r} || defined $options{w} || defined $options{x})) {
-     print STDERR "Options [f|d] and [c|e|m|r|w|x] are mutually exlusive, you can't mix it!\n";
+   (-e $ARGV[0] || defined $options{c} || defined $options{e} || defined $options{m} 
+     || defined $options{r} || defined $options{s} || defined $options{w} || defined $options{x})) {
+     print STDERR "Options [f|d] and [c|e|m|r|s|w|x] are mutually exlusive, you can't mix it!\n";
      Usage();
      exit 1;
    }
 
-if(defined $options{w}) {
+if(defined $options{w} || -e $ARGV[0]) {
   $DEBUG = 1;
   $config->{guard}->{email} = (getpwuid($>))[0] . "\@localhost";
-  $config->{watchlist}[0]->{path}[0]->{content} = $options{w};
+  $config->{watchlist}[0]->{path}[0]->{content} = (-e $ARGV[0])? $ARGV[0] : $options{w};
   $config->{watchlist}[0]->{path}[0]->{events} = 
     (defined $options{e}) ? $options{e} : "default";
   $config->{watchlist}[0]->{path}[0]->{type} = 
@@ -109,6 +112,12 @@ if(defined $options{w}) {
   }
   else {
   	$config->{watchlist}[0]->{path}[0]->{alert} = "off";
+  }
+  if(defined $options{s}) {
+  	$config->{watchlist}[0]->{path}[0]->{syslog} = "on";
+  }
+  else {
+  	$config->{watchlist}[0]->{path}[0]->{syslog} = "off";
   }
   if(defined $options{x}) {
     $config->{watchlist}[0]->{path}[1]->{content} = $options{x};
@@ -158,6 +167,8 @@ foreach my $watchpoint (@{$config->{watchlist}}) {
     $WatchList{$path->{type}}{$path->{content}}{"alert"} = 
       (defined($path->{alert}) && $path->{alert} eq "off") ? 0:1;
     $WatchList{$path->{type}}{$path->{content}}{"type"} =  $path->{type};
+    $WatchList{$path->{type}}{$path->{content}}{"syslog"} =
+      (defined($path->{syslog}) && $path->{syslog} eq "on") ? 1:0;
 
     our $mask;
     if(!defined($path->{'events'})) {
@@ -197,7 +208,7 @@ sub pathwatch {
       $inotify->watch ("$path", $mask, \&mywatch);
     }
     elsif($mode eq "recursive") {
-      File::Find::find({wanted => \&wanted}, "$path");
+      File::Find::find({wanted => \&wanted, "no_chdir" => 1}, "$path");
     }
   }
 }
@@ -235,35 +246,36 @@ sub mywatch {
   my $Path = getWatchList($e->{w}->{name});
   return if(!defined($Path));
   
+  my $now = POSIX::strftime "%e/%b/%Y %H:%M:%S", localtime;
   if($DEBUG) {
   	my $mask = $e->mask;
   	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR";}
   	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT";}
 	$Message = (defined $Message) ? "$Message,$InotifyEventNames{$mask} $Filename" : 
 	  "$InotifyEventNames{$mask} $Filename";
-  	print "$Message\n";
-	syslog("info","$Message");
+  	print "[$now] $Message\n";
+	syslog("info","$Message") if($Path->{'syslog'});
   	$Mail{Subject} = "[$PROGRAM] " . hostname() . ": $InotifyEventNames{$mask} $Filename";  
   }
 
   if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
-    print STDERR "* Directory $Filename is watched\n" if($DEBUG);
-    syslog("info","* Directory $Filename is watched");
+    print STDERR "[$now] * Directory $Filename is watched\n" if($DEBUG);
+    syslog("info","* Directory $Filename is watched") if($Path->{'syslog'});
     $inotify->watch ($Filename, $Path->{'mask'}, \&mywatch);
   }
   elsif($e->IN_CLOSE_WRITE && -f $Filename) {
   	$localMessage = "* $Filename is closed\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is changed";  
-    print STDERR $localMessage if($DEBUG);
-    syslog("info","$localMessage");
+    print STDERR "[$now] $localMessage" if($DEBUG);
+    syslog("info","$localMessage") if($Path->{'syslog'});
   }
   elsif($e->IN_DELETE) {
     $localMessage = "* $Filename is deleted\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is deleted";  
-    print STDERR $localMessage if($DEBUG);
-    syslog("info","$localMessage");
+    print STDERR "[$now] $localMessage" if($DEBUG);
+    syslog("info","$localMessage") if($Path->{'syslog'});
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
     if($e->IN_MOVED_FROM) {
@@ -275,8 +287,8 @@ sub mywatch {
       $localMessage = "* $Events{$e->{cookie}} is moved to $Filename\n";
       $Message = "$Message\n$localMessage";
       $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Events{$e->{cookie}} is moved to $Filename";  
-      print STDERR $localMessage if($DEBUG);
-      syslog("info","$localMessage");
+      print STDERR "[$now] $localMessage" if($DEBUG);
+      syslog("info","$localMessage") if($Path->{'syslog'});
       undef $Events{$e->{cookie}};
     }
   }
@@ -285,21 +297,25 @@ sub mywatch {
   	$localMessage = "* $Filename is replaced but watched again\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is replaced";  
-    print STDERR $localMessage if($DEBUG);
-    syslog("info","$localMessage");
+    print STDERR "[$now] $localMessage" if($DEBUG);
+    syslog("info","$localMessage") if($Path->{'syslog'});
     $inotify->watch ("$Filename", $Path->{'mask'}, \&mywatch);
   }
   if(defined($Path->{exec})) {
     my $command = stringf("$Path->{exec}",%formats);
-    print STDERR "* Command: $command\n" if($DEBUG);
-    syslog("info","* Command: $command");
-    system ("$command");
+    print STDERR "[$now] * Command: $command\n" if($DEBUG);
+    syslog("info","* Command: $command") if($Path->{'syslog'});
+    #We have already backslashed the escape characters in $Filename (in %formats).
+    $command =~ /^(.+)$/;
+    return if(!defined($1));
+    my $securecommand = $1;
+    system("$securecommand");
   }
   if(defined($Message) && $Path->{'alert'}) {
-    $Mail{Message} = $Message;
+    $Mail{Message} = "[$now]\n$Message";
     $Mail{To} = $Path->{'contactpoint'};
-    print STDERR "* Send email to $Mail{To}\n" if($DEBUG);
-    syslog("info","* Send email to $Mail{To}");
+    print STDERR "[$now] * Send email to $Mail{To}\n" if($DEBUG);
+    syslog("info","* Send email to $Mail{To}") if($Path->{'syslog'});
     sendmail(%Mail) or warn $Mail::Sendmail::error;
   }
 }

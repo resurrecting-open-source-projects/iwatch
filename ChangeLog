@@ -1,5 +1,20 @@
 iWatch: Realtime filesystem monitor
 
+version 0.0.8 (20. August 2006):
+* Security:
+  - Now using taint mode ("-T") to improve the security
+* Changes/Fixes:
+  - Syslog message is disabled per default, but it can be enabled or disabled
+    in each watched directory/file. Use syslog="on" in configuration file 
+    or option -s to enable the syslog report.
+  - In command line mode, the option -w is deprecated. Instead, we can put the directory/file name
+    in the argument without option -w (e.g. ./iwatch /bin)
+* New:
+  - Add time stamp in the output.
+
+version 0.0.7 (18. August 2006):
+* New Features:
+  - Add syslog
 version 0.0.6 (18. August 2006):
 * Changes/fixes:
   - Remove dependency to the module String::Format,
