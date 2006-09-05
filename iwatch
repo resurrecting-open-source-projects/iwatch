@@ -4,7 +4,7 @@
 # Usage in daemon mode: 
 # iwatch [-f <configfile.xml>] [-d] [-v]
 # Usage in command line mode:
-# iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception]
+# iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-x exception] <target>
 # iWatch monitor any changes in directories/files specified
 # in the configuration file, and send email alert.
 # This program needs inotify in linux kernel >= 2.6.13  
@@ -344,12 +344,12 @@ Usage: iwatch [-d] [-f <config file>] [-v]
   -v verbose mode.
 
 And in the command line mode:
-Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception]
+Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-x exception] <target>
   -c You can specify a command to be executed if an event occurs.
   -e Events list.
   -m Contact point's email address.
   -r Recursivity of the watched directory.
-  -w The watched directory
   -x The exception (file or directory).
+  target is the watched directory/file
 ENDOFHELP
 }

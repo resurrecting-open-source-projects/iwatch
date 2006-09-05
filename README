@@ -10,8 +10,8 @@ any unwanted changes.
 
 This application is written in Perl and need inotify support in Linux 
 kernel >= 2.6.13. And it needs also following third party perl modules:
-Linux::Inotify2, Event, Mail::Sendmail, XML::Simple and String::Format. 
-You can have all this modules from cpan as ussual. 
+Linux::Inotify2, Event, Mail::Sendmail and XML::Simple. You can have 
+all this modules from cpan as usual. 
 
 iWatch can be executed in two modes, the first mode is daemon mode where you
 can use an xml configuration file, and put a list of directories and files
@@ -125,5 +125,5 @@ iwatch -r -e access,create -m cahya@localhost -x /etc/mail /etc
   monitor only access and create events in /etc directory recursively
   with /etc/mail as exception and send email notification to cahya@localhost.
 
-iwatch -w /bin -r -c "(w;ps -ef)|mail -s '%f was changed' cahya@localhost" 
+iwatch -r -c "(w;ps -ef)|mail -s '%f was changed' cahya@localhost" /bin
   monitor /bin directory recursively and execute the command.
