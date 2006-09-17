@@ -1,7 +1,7 @@
 <!-- iWatch configuration -->
 <!--
-You can create many difference watch lists, each with it's own contact point
-And in this watch list you put all directories and files you want to monitor
+You can create several watch lists, each with it's own contact point
+And in this watch list you can put all directories and files you want to monitor
 The path type decide how a directory is monitored, recursively or as single
 directory. But it will monitor all new created directory (after iwatch
 started) recursively regardless of path type.
@@ -23,8 +23,7 @@ Don't forget to set the correct email address here
     <contactpoint email="root@localhost" name="Administrator"></contactpoint>
     <path type="recursive">/etc/apache2</path>
     <path type="single">/bin</path>
-    <path type="single">/etc/passwd</path>
-    <path type="single">/etc/shadow</path>
+    <path type="single" filter="shadow|passwd">/etc</path>
     <path type="recursive">/etc/mail</path>
     <path type="exception">/etc/mail/statistics</path>
   </watchlist>

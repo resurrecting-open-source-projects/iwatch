@@ -76,6 +76,7 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [
      any email notification (obviously).
   -r Recursivity of the watched directory.
   -s Enable report to the syslog.
+  -t filter string (regex) to compare with the filename or directory name. 
   -w The watched directory (Deprecated)
   -x The exception (file or directory).
 
@@ -97,6 +98,7 @@ example of config file:
     <path type="single">/etc/passwd</path>
     <path type="recursive">/etc/mail</path>
     <path type="exception">/etc/mail/statistics</path>
+    <path type="single" filter="shadow|passwd">/etc</path>
   </watchlist>
   <watchlist>
     <title>Only Test</title>

@@ -4,7 +4,7 @@
 # Usage in daemon mode: 
 # iwatch [-f <configfile.xml>] [-d] [-v]
 # Usage in command line mode:
-# iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-x exception] <target>
+# iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-t filter] -x exception] <target>
 # iWatch monitor any changes in directories/files specified
 # in the configuration file, and send email alert.
 # This program needs inotify in linux kernel >= 2.6.13  
@@ -22,7 +22,7 @@ use Sys::Syslog;
 #use Data::Dumper;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.0.8";
+my $VERSION = "0.0.9";
 my $DEBUG = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $config;
@@ -74,7 +74,7 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-my $opt = getopts("vhdf:c:e:m:rsw:x:",\%options);
+my $opt = getopts("vhdf:c:e:m:rst:w:x:",\%options);
 
 if(defined $options{h} || $opt == 0) {
   Usage();
@@ -89,7 +89,7 @@ $ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
 if((defined $options{f} || defined $options{d} || defined $options{F}) && 
    (-e $ARGV[0] || defined $options{c} || defined $options{e} || defined $options{m} 
-     || defined $options{r} || defined $options{s} || defined $options{w} || defined $options{x})) {
+     || defined $options{r} || defined $options{s} || defined $options{t} || defined $options{w} || defined $options{x})) {
      print STDERR "Options [f|d] and [c|e|m|r|s|w|x] are mutually exlusive, you can't mix it!\n";
      Usage();
      exit 1;
@@ -118,6 +118,9 @@ if(defined $options{w} || -e $ARGV[0]) {
   }
   else {
   	$config->{watchlist}[0]->{path}[0]->{syslog} = "off";
+  }
+  if(defined $options{t}) {
+  	$config->{watchlist}[0]->{path}[0]->{filter} = $options{t};
   }
   if(defined $options{x}) {
     $config->{watchlist}[0]->{path}[1]->{content} = $options{x};
@@ -169,6 +172,7 @@ foreach my $watchpoint (@{$config->{watchlist}}) {
     $WatchList{$path->{type}}{$path->{content}}{"type"} =  $path->{type};
     $WatchList{$path->{type}}{$path->{content}}{"syslog"} =
       (defined($path->{syslog}) && $path->{syslog} eq "on") ? 1:0;
+    $WatchList{$path->{type}}{$path->{content}}{"filter"} =  $path->{filter};
 
     our $mask;
     if(!defined($path->{'events'})) {
@@ -244,7 +248,8 @@ sub mywatch {
   $Filename = $e->fullname;
   return if(defined $WatchList{"exception"}{$Filename});
   my $Path = getWatchList($e->{w}->{name});
-  return if(!defined($Path));
+  return if(!defined($Path) || 
+    (defined $Path->{'filter'} && $e->{name} !~ /$Path->{'filter'}/));
   
   my $now = POSIX::strftime "%e/%b/%Y %H:%M:%S", localtime;
   if($DEBUG) {
@@ -344,11 +349,13 @@ Usage: iwatch [-d] [-f <config file>] [-v]
   -v verbose mode.
 
 And in the command line mode:
-Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-x exception] <target>
+Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-s on|off] [-t filter]-x exception] <target>
   -c You can specify a command to be executed if an event occurs.
   -e Events list.
   -m Contact point's email address.
   -r Recursivity of the watched directory.
+  -s syslog enabled or disabled.
+  -t filter string (regex) to compare with the filename or directory name. 
   -x The exception (file or directory).
   target is the watched directory/file
 ENDOFHELP

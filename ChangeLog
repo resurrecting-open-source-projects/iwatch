@@ -1,5 +1,16 @@
 iWatch: Realtime filesystem monitor
 
+version 0.0.9 (17. September 2006):
+* New Features:
+  - Add option -t <filter string> or filter="regex string". It will report only events
+    if the file/directory name match the filter string. It is useful if you watch a file like
+    /etc/passwd or /etc/shadow. Instead watching this single file, just watch the /etc directory
+    with filter="passwd|shadow", because if you watch only the passwd/shadow file, the watcher will
+    be deleted after one change of this file, and you will not get another notifications. 
+    This is caused by the application that changes passwd or shadow (e.g. passwd or chfn), they don't 
+    change the files directly, but create a new file and move it to passwd or shadow file, this will
+    remove the inode and therefore the watcher.
+
 version 0.0.8 (20. August 2006):
 * Security:
   - Now using taint mode ("-T") to improve the security
