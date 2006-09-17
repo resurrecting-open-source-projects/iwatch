@@ -156,7 +156,7 @@ Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
 foreach my $watchpoint (@{$config->{watchlist}}) {
   foreach my $path (@{$watchpoint->{path}}) {
     next if($path->{type} ne "exception");
-  	if(-d $path->{content}) { $path->{content} =~ s/\/$//;};
+  	if(-d $path->{content}) { $path->{content} =~ s/(.+)\/$/$1/;};
   	$WatchList{$path->{type}}{$path->{content}}{"type"} =  $path->{type};
   }
 }
@@ -164,7 +164,7 @@ foreach my $watchpoint (@{$config->{watchlist}}) {
 foreach my $watchpoint (@{$config->{watchlist}}) {
   foreach my $path (@{$watchpoint->{path}}) {
   	next if($path->{type} eq "exception");
-  	if(-d $path->{content}) { $path->{content} =~ s/\/$//;};
+  	if(-d $path->{content}) { $path->{content} =~ s/(.+)\/$/$1/;};
     $WatchList{$path->{type}}{$path->{content}}{"contactpoint"} = $watchpoint->{contactpoint}->{email};
     $WatchList{$path->{type}}{$path->{content}}{"exec"} = $path->{exec} if(defined($path->{exec}));
     $WatchList{$path->{type}}{$path->{content}}{"alert"} = 
