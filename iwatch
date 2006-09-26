@@ -2,9 +2,9 @@
 # iWatch
 # By Cahya Wirawan <cahya at gmx dot at>
 # Usage in daemon mode: 
-# iwatch [-f <configfile.xml>] [-d] [-v]
+# iwatch [-f <configfile.xml>] [-d] [-v] [-q]
 # Usage in command line mode:
-# iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-t filter] -x exception] <target>
+# iwatch [-c command] [-e event[,event[,..]]] [-m email] [-q] [-r] [-t filter] -x exception] <target>
 # iWatch monitor any changes in directories/files specified
 # in the configuration file, and send email alert.
 # This program needs inotify in linux kernel >= 2.6.13  
@@ -22,7 +22,7 @@ use Sys::Syslog;
 #use Data::Dumper;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.0.9";
+my $VERSION = "0.0.10";
 my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $config;
@@ -208,8 +208,10 @@ sub pathwatch {
   my ($mode,$path) = @_;
   if(-e "$path") {
     if($mode eq "single") {
-      print "Watch $path\n" if($VERBOSE>1);
-      syslog("info","Watch $path");
+      if($VERBOSE>1) {
+        print "Watch $path\n";
+        syslog("info","Watch $path");
+      }
       $inotify->watch ("$path", $mask, \&mywatch);
     }
     elsif($mode eq "recursive") {
@@ -222,8 +224,10 @@ sub wanted {
   our $mask;
   if(-d $File::Find::name) {
   	return if(!defined(getWatchList($File::Find::name)));
-    print "Watch $File::Find::name\n" if($VERBOSE>1);
-    syslog("info","Watch $File::Find::name");
+  	if($VERBOSE>1) {
+       print "Watch $File::Find::name\n";
+       syslog("info","Watch $File::Find::name");
+  	}
     $inotify->watch ("$File::Find::name", $mask, \&mywatch);
   }
 }
@@ -253,7 +257,7 @@ sub mywatch {
     (defined $Path->{'filter'} && $e->{name} !~ /$Path->{'filter'}/));
   
   my $now = POSIX::strftime "%e/%b/%Y %H:%M:%S", localtime;
-  if($VERBOSE) {
+  if($VERBOSE>0) {
   	my $mask = $e->mask;
   	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR";}
   	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT";}
@@ -344,16 +348,18 @@ $PROGRAM $VERSION, a realtime filesystem monitor.
 Cahya Wirawan <cahya at gmx dot at>, Vienna 2006.
 
 In the daemon mode, $PROGRAM has following options:
-Usage: iwatch [-d] [-f <config file>] [-v]
+Usage: iwatch [-d] [-f <config file>] [-v] [-q]
   -d Execute the application as daemon.
   -f Specify an alternate xml configuration file.
   -v verbose mode.
+  -q quite mode, no print out in console or syslog for each monitored directory.
 
 And in the command line mode:
-Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-s on|off] [-t filter]-x exception] <target>
+Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-q] [-r] [-s on|off] [-t filter]-x exception] <target>
   -c You can specify a command to be executed if an event occurs.
   -e Events list.
   -m Contact point's email address.
+  -q quite mode, no print out in console or syslog for each monitored directory.
   -r Recursivity of the watched directory.
   -s syslog enabled or disabled.
   -t filter string (regex) to compare with the filename or directory name. 
