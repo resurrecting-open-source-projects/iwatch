@@ -23,7 +23,7 @@ use Sys::Syslog;
 
 my $PROGRAM = "iWatch";
 my $VERSION = "0.0.9";
-my $DEBUG = 0;
+my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $config;
 my %WatchList;
@@ -74,7 +74,7 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-my $opt = getopts("vhdf:c:e:m:rst:w:x:",\%options);
+my $opt = getopts("vhdf:c:e:m:qrst:w:x:",\%options);
 
 if(defined $options{h} || $opt == 0) {
   Usage();
@@ -83,7 +83,8 @@ if(defined $options{h} || $opt == 0) {
 
 openlog("$PROGRAM", 'cons,pid', 'user');
 $CONFIGFILE = $options{f} if(defined $options{f});
-$DEBUG = 1 if defined $options{v};
+$VERBOSE += 2 if defined $options{v};
+$VERBOSE -= 1 if defined $options{q};
 delete @ENV{qw(ENV IFS CDPATH)};
 $ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
@@ -96,7 +97,7 @@ if((defined $options{f} || defined $options{d} || defined $options{F}) &&
    }
 
 if(defined $options{w} || -e $ARGV[0]) {
-  $DEBUG = 1;
+  $VERBOSE += 2;
   $config->{guard}->{email} = (getpwuid($>))[0] . "\@localhost";
   $config->{watchlist}[0]->{path}[0]->{content} = (-e $ARGV[0])? $ARGV[0] : $options{w};
   $config->{watchlist}[0]->{path}[0]->{events} = 
@@ -207,7 +208,7 @@ sub pathwatch {
   my ($mode,$path) = @_;
   if(-e "$path") {
     if($mode eq "single") {
-      print "Watch $path\n" if($DEBUG);
+      print "Watch $path\n" if($VERBOSE>1);
       syslog("info","Watch $path");
       $inotify->watch ("$path", $mask, \&mywatch);
     }
@@ -221,7 +222,7 @@ sub wanted {
   our $mask;
   if(-d $File::Find::name) {
   	return if(!defined(getWatchList($File::Find::name)));
-    print "Watch $File::Find::name\n" if($DEBUG);
+    print "Watch $File::Find::name\n" if($VERBOSE>1);
     syslog("info","Watch $File::Find::name");
     $inotify->watch ("$File::Find::name", $mask, \&mywatch);
   }
@@ -252,7 +253,7 @@ sub mywatch {
     (defined $Path->{'filter'} && $e->{name} !~ /$Path->{'filter'}/));
   
   my $now = POSIX::strftime "%e/%b/%Y %H:%M:%S", localtime;
-  if($DEBUG) {
+  if($VERBOSE) {
   	my $mask = $e->mask;
   	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR";}
   	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT";}
@@ -264,7 +265,7 @@ sub mywatch {
   }
 
   if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
-    print STDERR "[$now] * Directory $Filename is watched\n" if($DEBUG);
+    print STDERR "[$now] * Directory $Filename is watched\n" if($VERBOSE>0);
     syslog("info","* Directory $Filename is watched") if($Path->{'syslog'});
     $inotify->watch ($Filename, $Path->{'mask'}, \&mywatch);
   }
@@ -272,14 +273,14 @@ sub mywatch {
   	$localMessage = "* $Filename is closed\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is changed";  
-    print STDERR "[$now] $localMessage" if($DEBUG);
+    print STDERR "[$now] $localMessage" if($VERBOSE>0);
     syslog("info","$localMessage") if($Path->{'syslog'});
   }
   elsif($e->IN_DELETE) {
     $localMessage = "* $Filename is deleted\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is deleted";  
-    print STDERR "[$now] $localMessage" if($DEBUG);
+    print STDERR "[$now] $localMessage" if($VERBOSE>0);
     syslog("info","$localMessage") if($Path->{'syslog'});
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
@@ -292,7 +293,7 @@ sub mywatch {
       $localMessage = "* $Events{$e->{cookie}} is moved to $Filename\n";
       $Message = "$Message\n$localMessage";
       $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Events{$e->{cookie}} is moved to $Filename";  
-      print STDERR "[$now] $localMessage" if($DEBUG);
+      print STDERR "[$now] $localMessage" if($VERBOSE>0);
       syslog("info","$localMessage") if($Path->{'syslog'});
       undef $Events{$e->{cookie}};
     }
@@ -302,13 +303,13 @@ sub mywatch {
   	$localMessage = "* $Filename is replaced but watched again\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is replaced";  
-    print STDERR "[$now] $localMessage" if($DEBUG);
+    print STDERR "[$now] $localMessage" if($VERBOSE>0);
     syslog("info","$localMessage") if($Path->{'syslog'});
     $inotify->watch ("$Filename", $Path->{'mask'}, \&mywatch);
   }
   if(defined($Path->{exec})) {
     my $command = stringf("$Path->{exec}",%formats);
-    print STDERR "[$now] * Command: $command\n" if($DEBUG);
+    print STDERR "[$now] * Command: $command\n" if($VERBOSE>0);
     syslog("info","* Command: $command") if($Path->{'syslog'});
     #We have already backslashed the escape characters in $Filename (in %formats).
     $command =~ /^(.+)$/;
@@ -319,7 +320,7 @@ sub mywatch {
   if(defined($Message) && $Path->{'alert'}) {
     $Mail{Message} = "[$now]\n$Message";
     $Mail{To} = $Path->{'contactpoint'};
-    print STDERR "[$now] * Send email to $Mail{To}\n" if($DEBUG);
+    print STDERR "[$now] * Send email to $Mail{To}\n" if($VERBOSE>0);
     syslog("info","* Send email to $Mail{To}") if($Path->{'syslog'});
     sendmail(%Mail) or warn $Mail::Sendmail::error;
   }
