@@ -1,11 +1,10 @@
 iWatch: Realtime filesystem monitor
 
-
 version 0.0.11 (28. September 2006):
 * Changes/fixes:
   - Option -q is removed again because it is not necessary anymore.
-  - The monitored directories are now per default not printed out nor in syslog, 
-    but it should be enabled with option -v
+  - The List of monitored directories is now per default neither printed out nor in syslog, 
+    but it could be enabled with option -v
     
 version 0.0.10 (27. September 2006):
 * New Features:
