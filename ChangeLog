@@ -1,9 +1,22 @@
 iWatch: Realtime filesystem monitor
 
+
+version 0.0.11 (28. September 2006):
+* Changes/fixes:
+  - Option -q is removed again because it is not necessary anymore.
+  - The monitored directories are now per default not printed out nor in syslog, 
+    but it should be enabled with option -v
+    
+version 0.0.10 (27. September 2006):
+* New Features:
+  - Add option -q quite mode, no print out in console or syslog for each monitored directory.
+* Changes/fixes:
+  - Problem in watching root directory "/" is solved.
+
 version 0.0.9 (17. September 2006):
 * New Features:
   - Add option -t <filter string> or filter="regex string". It will report only events
-    if the file/directory name match the filter string. It is useful if you watch a file like
+    if the file/directory name matchs the filter string. It is useful if you watch a file like
     /etc/passwd or /etc/shadow. Instead watching this single file, just watch the /etc directory
     with filter="passwd|shadow", because if you watch only the passwd/shadow file, the watcher will
     be deleted after one change of this file, and you will not get another notifications. 

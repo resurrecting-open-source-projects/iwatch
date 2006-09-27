@@ -42,7 +42,6 @@ Usage: iwatch [-d] [-f <config file>] [-v]
   -f Specify an alternate xml configuration file. Per default, iWatch will
      read /etc/iwatch.xml as it's configuration file.
   -v verbose mode.
-  -q quite mode, no print out in console or syslog for each monitored directory.
 
 In the command line mode iWatch has following options:
 Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception] <target>
@@ -75,7 +74,6 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [
      * default - close_write, create, delete, move, delete_self and move_self.
   -m Contact point's email address. Without this option, iwatch will not send 
      any email notification (obviously).
-  -q quite mode, no print out in console or syslog for each monitored directory.
   -r Recursivity of the watched directory.
   -s Enable report to the syslog.
   -t filter string (regex) to compare with the filename or directory name. 
@@ -123,7 +121,7 @@ a file or subdirectory inside the monitored directory.
 Example of the command line mode:
 
 iwatch /tmp 
-  monitor changes in /tmp direcotory with default events
+  monitor changes in /tmp directory with default events
 
 iwatch -r -e access,create -m cahya@localhost -x /etc/mail /etc
   monitor only access and create events in /etc directory recursively
