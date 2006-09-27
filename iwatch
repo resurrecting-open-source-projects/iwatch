@@ -22,7 +22,7 @@ use Sys::Syslog;
 #use Data::Dumper;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.0.10";
+my $VERSION = "0.0.11";
 my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $config;
