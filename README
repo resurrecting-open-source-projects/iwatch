@@ -41,7 +41,8 @@ Usage: iwatch [-d] [-f <config file>] [-v]
      without this option.
   -f Specify an alternate xml configuration file. Per default, iWatch will
      read /etc/iwatch.xml as it's configuration file.
-  -v verbose mode.
+  -p Specify an alternate pid file (default: /var/run/iwatch.pid)  
+  -v Verbose mode.
 
 In the command line mode iWatch has following options:
 Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [-x exception] <target>
@@ -74,6 +75,7 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-m email] [-r] [-w target] [
      * default - close_write, create, delete, move, delete_self and move_self.
   -m Contact point's email address. Without this option, iwatch will not send 
      any email notification (obviously).
+  -h, --help Print this help.   
   -r Recursivity of the watched directory.
   -s Enable report to the syslog.
   -t filter string (regex) to compare with the filename or directory name. 
