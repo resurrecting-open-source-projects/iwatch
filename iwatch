@@ -379,24 +379,51 @@ Usage: iwatch [-d] [-f <config file>] [-v] [-p <pid file>]
   -v Verbose mode.
 
 And in the command line mode:
-Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email address>] [-r] [-s <on|off>] [-t filter] [-v] [--version] [-x exception] <target>
+Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email address>] 
+         [-r] [-s <on|off>] [-t <filter string>] [-v] [--version] [-x exception] <target>
+
+  Target is the directory or file you want to monitor.
   -c command
-     Specify a command to be executed if an event occurs.
+     Specify a command to be executed if an event occurs. And you can use
+     following special string format in the command:
+       %f Full path of the filename that gets an event.
+       %p Program name (iWatch)
+       %v Version number
   -e event[,event[,..]]
-     Specify events you want to watch.
+     Specify a list of events you want to watch. Following are the possible events you can use:
+       access        : file was accessed
+       modify        : file was modified
+       attrib        : file attributes changed
+       close_write   : file closed, after being opened in writeable mode
+       close_nowrite : file closed, after being opened in read-only mode
+       close         : file closed, regardless of read/write mode
+       open          : file was opened
+       moved_from    : File was moved away from.
+       moved_to      : File was moved to.
+       move          : a file/dir within watched directory was moved
+       create        : a file was created within watched directory
+       delete        : a file was deleted within watched directory
+       delete_self   : the watched file was deleted
+       unmount       : file system on which watched file exists was unmounted
+       q_overflow    : Event queued overflowed
+       ignored       : File was ignored
+       isdir         : event occurred against dir
+       oneshot       : only send event once
+       all_events    : All events
+       default       : close_write, create, delete, move, delete_self and move_self.
   -h, --help
      Print this help.
   -m <email address>
      Specify the contact point's email address.
   -r Recursivity of the watched directory.
   -s <on|off>
-     Enable or disable the syslog. 
-  -t filter
-     Specify filter string (regex) to compare with the filename or directory name. 
+     Enable or disable reports to the syslog (default is off/disabled)
+  -t <filter string>
+     Specify a filter string (regex) to compare with the filename or directory name. 
   -v verbose mode.
-  --version Print the version number.
+  --version
+     Print the version number.
   -x exception
-     Specify the exception file or directory should not be watched.
-  <target> is the watched directory/file
+     Specify the file or directory which should not be watched.
 ENDOFHELP
 }
