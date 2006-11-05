@@ -85,7 +85,7 @@ if(defined $options{h} || $opt == 0) {
 
 openlog("$PROGRAM", 'cons,pid', 'user');
 $CONFIGFILE = $options{f} if(defined $options{f});
-if ($options{p}) {
+if($options{p}) {
   #foo the taint mode, if the admin wants crazy filenames, so let him
   $options{p} =~ /(.*)/; 
   $PIDFILE = $1;
@@ -148,8 +148,8 @@ else {
 if(defined $options{d}) {
   my $ChildPid = fork;
 
-  if ($ChildPid) {
-    open (FH, '>', "$PIDFILE") or die "Could not write to pidfile \"$PIDFILE\": $!";
+  if($ChildPid) {
+    open(FH, '>', "$PIDFILE") or die "Could not write to pidfile \"$PIDFILE\": $!";
     print FH "$ChildPid"; 
     close FH; 
   }
@@ -370,23 +370,33 @@ sub HELP_MESSAGE {
   print <<ENDOFHELP;
   
 In the daemon mode, $PROGRAM has following options:
-Usage: iwatch [-d] [-f <config file>] [-v] [-p <pid file>] [-q]
+Usage: iwatch [-d] [-f <config file>] [-v] [-p <pid file>]
   -d Execute the application as daemon.
-  -f Specify an alternate xml configuration file.
-  -p Specify an alternate pid file (default: $PIDFILE)
+  -f <config file>
+     Specify an alternate xml configuration file.
+  -p <pid file>
+     Specify an alternate pid file (default: $PIDFILE)
   -v Verbose mode.
 
 And in the command line mode:
-Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] -m email] [-q] [-r] [-s on|off] [-t filter] [-x exception] <target>
-  -c You can specify a command to be executed if an event occurs.
-  -e Events list.
-  -h, --help Print this help.
-  -m Contact point's email address.
+Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email address>] [-r] [-s <on|off>] [-t filter] [-v] [--version] [-x exception] <target>
+  -c command
+     Specify a command to be executed if an event occurs.
+  -e event[,event[,..]]
+     Specify events you want to watch.
+  -h, --help
+     Print this help.
+  -m <email address>
+     Specify the contact point's email address.
   -r Recursivity of the watched directory.
-  -s syslog enabled or disabled.
-  -t filter string (regex) to compare with the filename or directory name. 
+  -s <on|off>
+     Enable or disable the syslog. 
+  -t filter
+     Specify filter string (regex) to compare with the filename or directory name. 
   -v verbose mode.
-  -x The exception (file or directory).
-  target is the watched directory/file
+  --version Print the version number.
+  -x exception
+     Specify the exception file or directory should not be watched.
+  <target> is the watched directory/file
 ENDOFHELP
 }

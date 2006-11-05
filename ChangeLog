@@ -2,7 +2,7 @@ iWatch: Realtime filesystem monitor
 
 version 0.0.12 (2. November 2006):
 * New Features:
-  - Option --help is now supported, thanks to Michael Prokop <mika@grml.org> for this suggestion 
+  - Options --help, --version are now supported, thanks to Michael Prokop <mika@grml.org> for this suggestion 
     and his supports to this project.
   - It supports pid file by default at /var/run/iwatch.pid, and can be changed with
     option -p. Thanks to Alexander 'formorer' Wirt for this patch and also his supports to this 
