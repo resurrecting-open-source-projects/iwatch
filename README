@@ -86,6 +86,14 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email addres
      Enable or disable reports to the syslog (default is off/disabled)
   -t <filter string>
      Specify a filter string (regex) to compare with the filename or directory name.
+     It will report events only if the file/directory name matchs the filter string.
+     It is useful if you watch a file like /etc/passwd or /etc/shadow. Instead watching
+     this single file, just watch the /etc directory with filter="passwd|shadow",
+     because if you watch only the passwd/shadow file, the watcher will be deleted 
+     after one change of this file, and you will not get another notifications.
+     This is caused by the application that changes passwd or shadow (e.g. passwd or chfn),
+     they don't change the files directly, but create a new file and move it to passwd or
+     shadow file, this will remove the inode and therefore the watcher.
   -v verbose mode.
   --version
      Print the version number.
