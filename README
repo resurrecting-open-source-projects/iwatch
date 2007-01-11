@@ -138,6 +138,34 @@ any sub directories created later after the IWatch is started.
 You can use also exception here if you don't want to get notification for 
 a file or subdirectory inside the monitored directory.
 
+Currently the iwatch's xml parser doesn't check the  validity of xml file against it's DTD.
+The iwatch's xml format is very simple and very easy to understand, and here is the DTD of
+iwatch's xml that could be used for the validation in the future release of iwatch:
+
+<!ELEMENT config (guard,watchlist+)>
+<!ELEMENT guard (#PCDATA)>
+<!ATTLIST guard
+   email  CDATA #REQUIRED
+   name   CDATA #REQUIRED
+>
+<!ELEMENT watchlist (title,contactpoint,path+)>
+<!ELEMENT title (#PCDATA)>
+<!ELEMENT contactpoint (#PCDATA)>
+<!ATTLIST contactpoint
+   email  CDATA #REQUIRED
+   name   CDATA #REQUIRED
+>
+<!ELEMENT path (#PCDATA)>
+<!ATTLIST path
+   type   CDATA #REQUIRED
+   alert  CDATA #IMPLIED
+   events CDATA #IMPLIED
+   exec   CDATA #IMPLIED
+   filter CDATA #IMPLIED
+   syslog CDATA #IMPLIED
+>
+
+
 Example of the command line mode:
 
 iwatch /tmp 
