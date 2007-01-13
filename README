@@ -158,13 +158,11 @@ iwatch's xml that could be used for the validation in the future release of iwat
 <!ELEMENT path (#PCDATA)>
 <!ATTLIST path
    type   CDATA          #REQUIRED
-   alert  (on|off) "off" #IMPLIED
-   events (access|modify|attrib|close_write|close_nowrite|close|
-           open|moved_from|moved_to|move|create|delete|delete_self|
-           unmount|q_overflow|ignored|isdir|oneshot|all_events|default) "default" #IMPLIED
+   alert  (on|off) "off"
+   events CDATA          #IMPLIED
    exec   CDATA          #IMPLIED
    filter CDATA          #IMPLIED
-   syslog (on|off) "off" #IMPLIED
+   syslog (on|off) "off"
 >
 
 Example of the command line mode:
