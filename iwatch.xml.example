@@ -10,17 +10,17 @@ Don't forget to set the correct email address here
 -->
 
 <config>
-  <guard email="root@localhost" name="IWatch"></guard>
+  <guard email="root@localhost" name="IWatch"/>
   <watchlist>
     <title>Public Website</title>
-    <contactpoint email="webmaster@localhost" name="Web Master"></contactpoint>
+    <contactpoint email="webmaster@localhost" name="Web Master"/>
     <path type="single" syslog="on">/var/www/localhost/htdocs</path>
     <path type="single" syslog="off">/var/www/localhost/htdocs/About</path>
     <path type="recursive">/var/www/localhost/htdocs/Photos</path>
   </watchlist>
   <watchlist>
     <title>Operating System</title>
-    <contactpoint email="root@localhost" name="Administrator"></contactpoint>
+    <contactpoint email="root@localhost" name="Administrator"/>
     <path type="recursive">/etc/apache2</path>
     <path type="single">/bin</path>
     <path type="single" filter="shadow|passwd">/etc</path>
@@ -29,7 +29,7 @@ Don't forget to set the correct email address here
   </watchlist>
   <watchlist>
     <title>Only Test</title>
-    <contactpoint email="root@localhost" name="Administrator"></contactpoint>
+    <contactpoint email="root@localhost" name="Administrator"/>
     <path type="single" alert="off" exec="(w;ps)|mail -s %f root@localhost">/tmp/dir1</path>
     <path type="single" events="access,close" alert="off" exec="(w;ps)|mail -s %f root@localhost">/tmp/dir2</path>
     <path type="single" events="default,access" alert="off" exec="(w;ps)|mail -s '%f is accessed at %{%H:%M:%S}d' root@localhost">/tmp/dir3</path>

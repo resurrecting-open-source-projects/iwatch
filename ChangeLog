@@ -1,5 +1,15 @@
 iWatch: Realtime filesystem monitor
 
+version 0.1.0 (14. January 2007):
+* Changes/fixes:
+  - Because it's already stable and there is no major problem
+    since few months, we move from alpha status to beta.
+  - Give a warning if it can't watch the file/directory.
+  - Update the documentation with information about DTD.
+    Thanks to Oliver Frommel for the bug report and suggestion to use DTD
+    for the validation of xml configuration file. It will be implemented in 
+    the next release.
+
 version 0.0.12 (2. November 2006):
 * New Features:
   - Options --help, --version are now supported, thanks to Michael Prokop <mika@grml.org> for this suggestion 

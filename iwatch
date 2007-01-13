@@ -22,7 +22,7 @@ use Sys::Syslog;
 #use Data::Dumper;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.0.12";
+my $VERSION = "0.1.0";
 my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $PIDFILE = "/var/run/iwatch.pid";
@@ -226,7 +226,8 @@ sub pathwatch {
         print "Watch $path\n";
         syslog("info","Watch $path");
       }
-      $inotify->watch ("$path", $mask, \&mywatch);
+      print STDERR "Can't watch $path: $!\n"
+        if(!$inotify->watch ("$path", $mask, \&mywatch));
     }
     elsif($mode eq "recursive") {
       File::Find::find({wanted => \&wanted, "no_chdir" => 1}, "$path");
@@ -237,12 +238,13 @@ sub pathwatch {
 sub wanted {
   our $mask;
   if(-d $File::Find::name) {
-  	return if(!defined(getWatchList($File::Find::name)));
-  	if($VERBOSE>1) {
-       print "Watch $File::Find::name\n";
-       syslog("info","Watch $File::Find::name");
-  	}
-    $inotify->watch ("$File::Find::name", $mask, \&mywatch);
+    return if(!defined(getWatchList($File::Find::name)));
+    if($VERBOSE>1) {
+      print "Watch $File::Find::name\n";
+      syslog("info","Watch $File::Find::name");
+    }
+    print STDERR "Can't watch $File::Find::name: $!\n"
+      if(!$inotify->watch ("$File::Find::name", $mask, \&mywatch));
   }
 }
 
@@ -285,7 +287,8 @@ sub mywatch {
   if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
     print STDERR "[$now] * Directory $Filename is watched\n" if($VERBOSE>0);
     syslog("info","* Directory $Filename is watched") if($Path->{'syslog'});
-    $inotify->watch ($Filename, $Path->{'mask'}, \&mywatch);
+    print STDERR "Can't watch $Filename: $!\n"
+      if(!$inotify->watch ($Filename, $Path->{'mask'}, \&mywatch));
   }
   elsif($e->IN_CLOSE_WRITE && -f $Filename) {
   	$localMessage = "* $Filename is closed\n";
