@@ -146,25 +146,26 @@ iwatch's xml that could be used for the validation in the future release of iwat
 <!ELEMENT guard (#PCDATA)>
 <!ATTLIST guard
    email  CDATA #REQUIRED
-   name   CDATA #REQUIRED
+   name   CDATA #IMPLIED
 >
 <!ELEMENT watchlist (title,contactpoint,path+)>
 <!ELEMENT title (#PCDATA)>
 <!ELEMENT contactpoint (#PCDATA)>
 <!ATTLIST contactpoint
    email  CDATA #REQUIRED
-   name   CDATA #REQUIRED
+   name   CDATA #IMPLIED
 >
 <!ELEMENT path (#PCDATA)>
 <!ATTLIST path
-   type   CDATA #REQUIRED
-   alert  CDATA #IMPLIED
-   events CDATA #IMPLIED
-   exec   CDATA #IMPLIED
-   filter CDATA #IMPLIED
-   syslog CDATA #IMPLIED
+   type   CDATA          #REQUIRED
+   alert  (on|off) "off" #IMPLIED
+   events (access|modify|attrib|close_write|close_nowrite|close|
+           open|moved_from|moved_to|move|create|delete|delete_self|
+           unmount|q_overflow|ignored|isdir|oneshot|all_events|default) "default" #IMPLIED
+   exec   CDATA          #IMPLIED
+   filter CDATA          #IMPLIED
+   syslog (on|off) "off" #IMPLIED
 >
-
 
 Example of the command line mode:
 
