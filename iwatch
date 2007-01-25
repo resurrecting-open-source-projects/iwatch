@@ -16,17 +16,16 @@ use Linux::Inotify2;
 use File::Find;
 use Mail::Sendmail;
 use Sys::Hostname;
-use XML::Simple;
+use XML::SimpleObject::LibXML;
 use POSIX;
 use Sys::Syslog;
-#use Data::Dumper;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.1.0";
+my $VERSION = "0.2.0";
 my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $PIDFILE = "/var/run/iwatch.pid";
-my $config;
+my $xmlobj;
 my %WatchList;
 my %Mail;
 my %Events;
@@ -105,45 +104,45 @@ if((defined $options{d} || defined $options{f} || defined $options{p}) &&
 
 if(defined $options{w} || -e $ARGV[0]) {
   $VERBOSE += 1;
-  $config->{guard}->{email} = (getpwuid($>))[0] . "\@localhost";
-  $config->{watchlist}[0]->{path}[0]->{content} = (-e $ARGV[0])? $ARGV[0] : $options{w};
-  $config->{watchlist}[0]->{path}[0]->{events} = 
-    (defined $options{e}) ? $options{e} : "default";
-  $config->{watchlist}[0]->{path}[0]->{type} = 
-    (defined $options{r}) ? "recursive" : "single";
-  if(defined $options{c}) {
-  	$config->{watchlist}[0]->{path}[0]->{exec} = $options{c};
-  }
-  if(defined $options{m}) {
-  	$config->{watchlist}[0]->{path}[0]->{alert} = "on";
-  	$config->{watchlist}[0]->{contactpoint}->{email} = $options{m};
-  }
-  else {
-  	$config->{watchlist}[0]->{path}[0]->{alert} = "off";
-  }
-  if(defined $options{s}) {
-  	$config->{watchlist}[0]->{path}[0]->{syslog} = "on";
-  }
-  else {
-  	$config->{watchlist}[0]->{path}[0]->{syslog} = "off";
-  }
-  if(defined $options{t}) {
-  	$config->{watchlist}[0]->{path}[0]->{filter} = $options{t};
-  }
+  my $user = (getpwuid($>))[0];
+  my $xmlstr = "<config>\n";
+  $xmlstr .= "  <guard email=\"" . "$user\@localhost\"/>\n";
+  $xmlstr .= "  <watchlist>\n";
+  $xmlstr .= "    <contactpoint email=\"" . ((defined $options{m})? $options{m} : 
+    "$user\@localhost") . "\"/>\n";
+  $xmlstr .= "    <path ";
+  $xmlstr .= "type=\"" . ((defined $options{r}) ? "recursive" : "single") . "\" ";
+  $xmlstr .= "events=\"" . ((defined $options{e}) ? $options{e} : "default") . "\" ";
+  $xmlstr .= "exec=\"$options{c}\" " if(defined $options{c});
+  $xmlstr .= "alert=\"" . ((defined $options{m}) ? "on" : "off") . "\" ";
+  $xmlstr .= "syslog=\"" . ((defined $options{s}) ? "on" : "off") . "\" ";
+  $xmlstr .= "filter=\"$options{t}\" " if(defined $options{t});
+  $xmlstr .= ">" . ((-e $ARGV[0])? $ARGV[0] : $options{w}) . "</path>\n";
   if(defined $options{x}) {
-    $config->{watchlist}[0]->{path}[1]->{content} = $options{x};
-    $config->{watchlist}[0]->{path}[1]->{type} = "exception";
+    $xmlstr .= "    <path type=\"exception\">$options{x}</path>\n";
   }
+  $xmlstr .= "  </watchlist>\n";
+  $xmlstr .= "</config>\n";
+  #print "XMLstr: \n$xmlstr\n";
+  $xmlobj = new XML::SimpleObject::LibXML (XML => "$xmlstr");
 }
 else {
   if(! -f $CONFIGFILE) {
     Usage();
   	exit 1;
   }
-  $config = XMLin($CONFIGFILE, ForceArray => ['path','watchlist']);
+  my $parser = new XML::LibXML;
+  open(CF,"<$CONFIGFILE");
+  if(<CF> =~ /^<\?xml/) {
+    $parser->validation(1);
+  }
+  else {
+    print STDERR "Please use DTD for xml validation!\n";
+    $parser->validation(0);
+  }
+  close(CF);
+  $xmlobj = new XML::SimpleObject::LibXML ($parser->parse_file("$CONFIGFILE"));
 }
-
-#print Dumper($config);
 
 if(defined $options{d}) {
   my $ChildPid = fork;
@@ -168,41 +167,42 @@ if(defined $options{d}) {
 my $inotify = new Linux::Inotify2;
 Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
 
-foreach my $watchpoint (@{$config->{watchlist}}) {
-  foreach my $path (@{$watchpoint->{path}}) {
-    next if($path->{type} ne "exception");
-  	if(-d $path->{content}) { $path->{content} =~ s/(.+)\/$/$1/;};
-  	$WatchList{$path->{type}}{$path->{content}}{"type"} =  $path->{type};
+foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
+  foreach my $path ($watchlist->children("path")) {
+    next if($path->attribute("type") ne "exception");
+    if(-d $path->value) { $_ = $path->value; s/(.+)\/$/$1/; $path->value($_);}
+    $WatchList{$path->attribute("type")}{$path->value}{"type"} = $path->attribute("type");
   }
 }
 
-foreach my $watchpoint (@{$config->{watchlist}}) {
-  foreach my $path (@{$watchpoint->{path}}) {
-  	next if($path->{type} eq "exception");
-  	if(-d $path->{content}) { $path->{content} =~ s/(.+)\/$/$1/;};
-    $WatchList{$path->{type}}{$path->{content}}{"contactpoint"} = $watchpoint->{contactpoint}->{email};
-    $WatchList{$path->{type}}{$path->{content}}{"exec"} = $path->{exec} if(defined($path->{exec}));
-    $WatchList{$path->{type}}{$path->{content}}{"alert"} = 
-      (defined($path->{alert}) && $path->{alert} eq "off") ? 0:1;
-    $WatchList{$path->{type}}{$path->{content}}{"type"} =  $path->{type};
-    $WatchList{$path->{type}}{$path->{content}}{"syslog"} =
-      (defined($path->{syslog}) && $path->{syslog} eq "on") ? 1:0;
-    $WatchList{$path->{type}}{$path->{content}}{"filter"} =  $path->{filter};
+foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
+  foreach my $path ($watchlist->children("path")) {
+    next if($path->attribute("type") eq "exception");
+    if(-d $path->value) { $_ = $path->value; s/(.+)\/$/$1/; $path->value($_);}
+    $WatchList{$path->attribute("type")}{$path->value}{"contactpoint"} = 
+      $watchlist->child("contactpoint")->attribute("email") if(defined($watchlist->child("contactpoint")));
+    $WatchList{$path->attribute("type")}{$path->value}{"exec"} = $path->attribute("exec") if(defined($path->attribute("exec")));
+    $WatchList{$path->attribute("type")}{$path->value}{"alert"} = 
+      (defined($path->attribute("alert")) && $path->attribute("alert") eq "off") ? 0:1;
+    $WatchList{$path->attribute("type")}{$path->value}{"type"} = $path->attribute("type");
+    $WatchList{$path->attribute("type")}{$path->value}{"syslog"} =
+      (defined($path->attribute("syslog") && $path->attribute("syslog") eq "on") ? 1:0);
+    $WatchList{$path->attribute("type")}{$path->value}{"filter"} = $path->attribute("filter");
 
     our $mask;
-    if(!defined($path->{'events'})) {
-      $mask = $InotifyEvents{'default'}; 
+    if(!defined($path->attribute("events"))) {
+      $mask = $InotifyEvents{'default'};
     }
     else {
-      $mask = getMask($path->{'events'});
-      $mask = $mask | $InotifyEvents{'create'} if($path->{type} eq "recursive");
+     $mask = getMask($path->attribute("events"));
+     $mask = $mask | $InotifyEvents{'create'} if($path->attribute("type") eq "recursive");
     }
-    $WatchList{$path->{type}}{$path->{content}}{"mask"} = $mask;
-    pathwatch($path->{type},$path->{content});
+    $WatchList{$path->attribute("type")}{$path->value}{"mask"} = $mask;
+    pathwatch($path->attribute("type"),$path->value); 
   }
 }
 
-$Mail{From} = $config->{guard}->{email};
+$Mail{From} = $xmlobj->child("config")->child("guard")->attribute("email");
 
 Event::loop;
 
@@ -240,8 +240,8 @@ sub wanted {
   if(-d $File::Find::name) {
     return if(!defined(getWatchList($File::Find::name)));
     if($VERBOSE>1) {
-      print "Watch $File::Find::name\n";
-      syslog("info","Watch $File::Find::name");
+       print "Watch $File::Find::name\n";
+       syslog("info","Watch $File::Find::name");
     }
     print STDERR "Can't watch $File::Find::name: $!\n"
       if(!$inotify->watch ("$File::Find::name", $mask, \&mywatch));

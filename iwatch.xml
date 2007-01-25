@@ -1,3 +1,6 @@
+<?xml version="1.0" ?>
+<!DOCTYPE config SYSTEM "/etc/iwatch.dtd" >
+
 <config>
   <guard email="iwatch@localhost" name="IWatch"/>
   <watchlist>

@@ -1,0 +1,23 @@
+<!ELEMENT config (guard,watchlist+)>
+<!ELEMENT guard (#PCDATA)>
+<!ATTLIST guard
+   email  CDATA #REQUIRED
+   name   CDATA #IMPLIED
+>
+<!ELEMENT watchlist (title,contactpoint,path+)>
+<!ELEMENT title (#PCDATA)>
+<!ELEMENT contactpoint (#PCDATA)>
+<!ATTLIST contactpoint
+   email  CDATA #REQUIRED
+   name   CDATA #IMPLIED
+>
+<!ELEMENT path (#PCDATA)>
+<!ATTLIST path
+   type   CDATA          #REQUIRED
+   alert  (on|off) "off"
+   events CDATA          #IMPLIED
+   exec   CDATA          #IMPLIED
+   filter CDATA          #IMPLIED
+   syslog (on|off) "off"
+>
+
