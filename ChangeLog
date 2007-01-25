@@ -1,5 +1,12 @@
 iWatch: Realtime filesystem monitor
 
+version 0.2.0 (25. January 2007):
+* Changes/New Features:
+  - It validates now the xml file using iwatch.dtd file.
+  - Dependency was changed from XML::Simple to XML::SimpleObject::LibXML,
+    this is necessary for XML validation using DTD file.
+  - This is a test version due of change from XML::Simple to XML::SimpleObject::LibXML.
+
 version 0.1.0 (14. January 2007):
 * Changes/fixes:
   - Because it's already stable and there is no major problem
