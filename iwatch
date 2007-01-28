@@ -186,7 +186,7 @@ foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
       (defined($path->attribute("alert")) && $path->attribute("alert") eq "off") ? 0:1;
     $WatchList{$path->attribute("type")}{$path->value}{"type"} = $path->attribute("type");
     $WatchList{$path->attribute("type")}{$path->value}{"syslog"} =
-      (defined($path->attribute("syslog") && $path->attribute("syslog") eq "on") ? 1:0);
+      (defined($path->attribute("syslog")) && $path->attribute("syslog") eq "on") ? 1:0;
     $WatchList{$path->attribute("type")}{$path->value}{"filter"} = $path->attribute("filter");
 
     our $mask;
