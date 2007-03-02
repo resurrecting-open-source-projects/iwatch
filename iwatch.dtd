@@ -13,7 +13,7 @@
 >
 <!ELEMENT path (#PCDATA)>
 <!ATTLIST path
-   type   CDATA          #REQUIRED
+   type   (single|recursive|exception|regexception) "single"
    alert  (on|off) "off"
    events CDATA          #IMPLIED
    exec   CDATA          #IMPLIED
