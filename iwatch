@@ -21,7 +21,7 @@ use POSIX;
 use Sys::Syslog;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.2.0";
+my $VERSION = "0.2.1";
 my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $PIDFILE = "/var/run/iwatch.pid";
@@ -29,7 +29,6 @@ my $xmlobj;
 my %WatchList;
 my %Mail;
 my %Events;
-my $Filename;
 sub Usage;
 sub wanted;
 sub mywatch;
@@ -43,9 +42,16 @@ my %formats = (
   'p' => sub { "$PROGRAM" },
   'v' => sub { "$VERSION" },
   'f' => sub { 
-  	$Filename =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" \\])/\\$1/g; 
-  	"$Filename"; 
+  	$Events{'Filename'} =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" \\])/\\$1/g; 
+  	"$Events{'Filename'}"; 
   },
+  'F' => sub {
+        return if($Events{'Name'} !~ /MOVED_TO/ );
+        $Events{'OldFilename'} =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" \\])/\\$1/g;
+        "$Events{'OldFilename'}";
+  },
+  'e' => sub { "$Events{'Name'}"; },
+  'c' => sub { "$Events{'Cookie'}"; },
 );
 my %InotifyEvents = (
   'access' => IN_ACCESS,
@@ -75,7 +81,7 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-my $opt = getopts("vdf:p:c:e:hm:rst:w:x:",\%options);
+my $opt = getopts("vdf:p:c:e:hm:rst:w:x:X:",\%options);
 
 if(defined $options{h} || $opt == 0) {
   Usage();
@@ -96,7 +102,7 @@ $ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
 if((defined $options{d} || defined $options{f} || defined $options{p}) && 
    (-e $ARGV[0] || defined $options{c} || defined $options{e} || defined $options{m} 
-     || defined $options{r} || defined $options{s} || defined $options{t} || defined $options{w} || defined $options{x})) {
+     || defined $options{r} || defined $options{s} || defined $options{t} || defined $options{w} || defined $options{x} | defined $options{X})) {
      print STDERR "Options [d|f|p] and [c|e|m|r|s|w|x] are mutually exlusive, you can't mix it!\n";
      Usage();
      exit 1;
@@ -120,6 +126,9 @@ if(defined $options{w} || -e $ARGV[0]) {
   $xmlstr .= ">" . ((-e $ARGV[0])? $ARGV[0] : $options{w}) . "</path>\n";
   if(defined $options{x}) {
     $xmlstr .= "    <path type=\"exception\">$options{x}</path>\n";
+  }
+  if(defined $options{X}) {
+    $xmlstr .= "    <path type=\"regexception\">$options{X}</path>\n";
   }
   $xmlstr .= "  </watchlist>\n";
   $xmlstr .= "</config>\n";
@@ -169,7 +178,8 @@ Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
 
 foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
   foreach my $path ($watchlist->children("path")) {
-    next if($path->attribute("type") ne "exception");
+    next if($path->attribute("type") ne "exception" &&
+      $path->attribute("type") ne "regexception");
     if(-d $path->value) { $_ = $path->value; s/(.+)\/$/$1/; $path->value($_);}
     $WatchList{$path->attribute("type")}{$path->value}{"type"} = $path->attribute("type");
   }
@@ -177,7 +187,8 @@ foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
 
 foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
   foreach my $path ($watchlist->children("path")) {
-    next if($path->attribute("type") eq "exception");
+    next if($path->attribute("type") eq "exception" ||
+      $path->attribute("type") eq "regexception");
     if(-d $path->value) { $_ = $path->value; s/(.+)\/$/$1/; $path->value($_);}
     $WatchList{$path->attribute("type")}{$path->value}{"contactpoint"} = 
       $watchlist->child("contactpoint")->attribute("email") if(defined($watchlist->child("contactpoint")));
@@ -219,8 +230,16 @@ sub getMask {
 
 sub pathwatch {
   our $mask;
+  my $key;
   my ($mode,$path) = @_;
   if(-e "$path") {
+    return if(defined $WatchList{"exception"}{$path});
+    foreach $key (keys %{$WatchList{"exception"}}) {
+      return undef if("$path" =~ /^$key/);
+    }
+    foreach $key (keys %{$WatchList{"regexception"}}) {
+      return if("$path" =~ /$key/);
+    }
     if($mode eq "single") {
       if($VERBOSE>1) {
         print "Watch $path\n";
@@ -237,8 +256,16 @@ sub pathwatch {
 
 sub wanted {
   our $mask;
+  my $key;
   if(-d $File::Find::name) {
-    return if(!defined(getWatchList($File::Find::name)));
+    return if(defined $WatchList{"exception"}{$File::Find::name});
+    foreach $key (keys %{$WatchList{"exception"}}) {
+      return undef if("$File::Find::name" =~ /^$key/);
+    }
+    foreach $key (keys %{$WatchList{"regexception"}}) {
+      return if("$File::Find::name" =~ /$key/);
+    }
+    #return if(!defined(getWatchList($File::Find::name)));
     if($VERBOSE>1) {
        print "Watch $File::Find::name\n";
        syslog("info","Watch $File::Find::name");
@@ -249,39 +276,61 @@ sub wanted {
 }
 
 sub getWatchList {
-  my ($path) = @_;
-  return undef if($WatchList{"exception"}{$path});
-  foreach my $key (keys %{$WatchList{"exception"}}) {
+  my ($path,$filename) = @_;
+  my $rv;
+  my $key;
+  return undef if(defined $WatchList{"exception"}{$path});
+  foreach $key (keys %{$WatchList{"exception"}}) {
     return undef if("$path" =~ /^$key/);
   }
-  return $WatchList{"single"}{$path} if(defined $WatchList{"single"}{$path});
-  return $WatchList{"recursive"}{$path} if(defined $WatchList{"recursive"}{$path});
-  foreach my $key (keys %{$WatchList{"recursive"}}) {
-    return $WatchList{"recursive"}{$key} if($path =~ /^$key/);
+  foreach $key (keys %{$WatchList{"regexception"}}) {
+    return undef if("$filename" =~ /$key/);
   }
-  return undef;
+  if(defined $WatchList{"single"}{$path}) {
+    $rv = $WatchList{"single"}{$path};
+  }
+  elsif(defined $WatchList{"recursive"}{$path}) {
+    $rv = $WatchList{"recursive"}{$path};
+  }
+  else {
+    foreach $key (keys %{$WatchList{"recursive"}}) {
+      if($path =~ /^$key/) {
+        $rv = $WatchList{"recursive"}{$key};
+        last;
+      }
+    }
+  }
+  (defined $rv->{"filter"} && "$filename" !~ /$rv->{'filter'}/)?
+    return undef: return $rv;
 }
 
 sub mywatch {
   my $e = shift;
   my $Message;
   my $localMessage;
-  $Filename = $e->fullname;
+  my $mask;
+  my $Filename = $Events{'Filename'} = $e->fullname;
   return if(defined $WatchList{"exception"}{$Filename});
-  my $Path = getWatchList($e->{w}->{name});
-  return if(!defined($Path) || 
-    (defined $Path->{'filter'} && $e->{name} !~ /$Path->{'filter'}/));
+  my $Path = getWatchList($e->{w}->{name},$e->{name});
+  return if(!defined($Path));
   
   my $now = POSIX::strftime "%e/%b/%Y %H:%M:%S", localtime;
+  $Events{'Name'} = "";
+  if($e->IN_ISDIR) {
+    $mask = ($e->mask ^ IN_ISDIR);
+    $Events{'Name'} = "IN_ISDIR,";
+  }
+  if($e->IN_ONESHOT) {
+    $mask = ($e->mask ^ IN_ISDIR);
+    $Events{'Name'} = "IN_ONESHOT,";
+  }
+  $Events{'Name'} .= $InotifyEventNames{$mask};
+  $Events{'Cookie'} = $e->{cookie};
   if($VERBOSE>0) {
-  	my $mask = $e->mask;
-  	if($e->IN_ISDIR) { $mask = ($e->mask ^ IN_ISDIR); $Message = "IN_ISDIR";}
-  	if($e->IN_ONESHOT) { $mask = ($e->mask ^ IN_ONESHOT); $Message = "IN_ONESHOT";}
-	$Message = (defined $Message) ? "$Message,$InotifyEventNames{$mask} $Filename" : 
-	  "$InotifyEventNames{$mask} $Filename";
+        $Message = "$Events{'Name'} $Filename";
   	print "[$now] $Message\n";
 	syslog("info","$Message") if($Path->{'syslog'});
-  	$Mail{Subject} = "[$PROGRAM] " . hostname() . ": $InotifyEventNames{$mask} $Filename";  
+  	$Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Message";  
   }
 
   if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
@@ -316,6 +365,7 @@ sub mywatch {
       $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Events{$e->{cookie}} is moved to $Filename";  
       print STDERR "[$now] $localMessage" if($VERBOSE>0);
       syslog("info","$localMessage") if($Path->{'syslog'});
+      $Events{'OldFilename'} = $Events{$e->{cookie}};
       undef $Events{$e->{cookie}};
     }
   }
@@ -383,13 +433,17 @@ Usage: iwatch [-d] [-f <config file>] [-v] [-p <pid file>]
 
 And in the command line mode:
 Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email address>] 
-         [-r] [-s <on|off>] [-t <filter string>] [-v] [--version] [-x exception] <target>
+         [-r] [-s <on|off>] [-t <filter string>] [-v] [--version] [-x exception]
+         [-X <regex string as exception>] <target>
 
   Target is the directory or file you want to monitor.
   -c command
      Specify a command to be executed if an event occurs. And you can use
      following special string format in the command:
+       %c Event cookie number
+       %e Event name
        %f Full path of the filename that gets an event.
+       %F The old filename in case moved_to event.
        %p Program name (iWatch)
        %v Version number
   -e event[,event[,..]]
@@ -428,5 +482,7 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email addres
      Print the version number.
   -x exception
      Specify the file or directory which should not be watched.
+  -X <regex string as exception>
+     Specify a regex string as exception
 ENDOFHELP
 }

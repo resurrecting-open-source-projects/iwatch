@@ -46,12 +46,17 @@ Usage: iwatch [-d] [-f <config file>] [-v]
 
 In the command line mode iWatch has following options:
 Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email address>] 
-         [-r] [-r] [-s <on|off>] [-t filter] [-v] [--version] [-x exception] <target>
+         [-r] [-r] [-s <on|off>] [-t filter] [-v] [--version] [-x exception]
+         [-X <regex string as exception>] <target>
+
   Target is the directory or file you want to monitor.
   -c command
      You can specify a command to be executed if an event occurs. And you can use
      following special string format in the command:
-       %f Full path of the filename that gets an event.
+       %c Event cookie number
+       %e Event name
+       %f Full path of the filename that gets an event
+       %F The old filename in case moved_to event
        %p Program name (iWatch)
        %v Version number
   -e event[,event[,..]]
@@ -99,6 +104,8 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email addres
      Print the version number.
   -x exception
      Specify the file or directory which should not be watched.
+  -X <regex string as exception>
+     Specify a regex string as exception
 
 example of config file: 
 
