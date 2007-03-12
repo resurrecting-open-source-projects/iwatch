@@ -1,5 +1,14 @@
 iWatch: Realtime filesystem monitor
 
+version 0.2.1 (12. March 2007)
+* Changes/New Features:
+  - Option -X was added. It is exception with regex string.
+  - New string format in command option:
+      %c Event cookie number.
+      %e Event name.
+      %F The old filename in case moved_to event.
+  - Fix the problem with email, it send now email for all defined events.
+
 version 0.2.0 (25. January 2007):
 * Changes/New Features:
   - It validates now the xml file using iwatch.dtd file.
