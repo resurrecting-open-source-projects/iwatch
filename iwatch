@@ -316,23 +316,23 @@ sub mywatch {
   
   my $now = POSIX::strftime "%e/%b/%Y %H:%M:%S", localtime;
   $Events{'Name'} = "";
+  $mask = $e->mask;
   if($e->IN_ISDIR) {
-    $mask = ($e->mask ^ IN_ISDIR);
+    $mask ^= IN_ISDIR;
     $Events{'Name'} = "IN_ISDIR,";
   }
   if($e->IN_ONESHOT) {
-    $mask = ($e->mask ^ IN_ISDIR);
+    $mask ^= IN_ISDIR;
     $Events{'Name'} = "IN_ONESHOT,";
   }
   $Events{'Name'} .= $InotifyEventNames{$mask};
   $Events{'Cookie'} = $e->{cookie};
+  $Message = "$Events{'Name'} $Filename";
+  $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Message";
   if($VERBOSE>0) {
-        $Message = "$Events{'Name'} $Filename";
-  	print "[$now] $Message\n";
-	syslog("info","$Message") if($Path->{'syslog'});
-  	$Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Message";  
+    print "[$now] $Message\n";
+    syslog("info","$Message") if($Path->{'syslog'});
   }
-
   if($e->IN_CREATE && -d $Filename && $Path->{'type'} eq "recursive") {
     print STDERR "[$now] * Directory $Filename is watched\n" if($VERBOSE>0);
     syslog("info","* Directory $Filename is watched") if($Path->{'syslog'});
@@ -340,7 +340,7 @@ sub mywatch {
       if(!$inotify->watch ($Filename, $Path->{'mask'}, \&mywatch));
   }
   elsif($e->IN_CLOSE_WRITE && -f $Filename) {
-  	$localMessage = "* $Filename is closed\n";
+    $localMessage = "* $Filename is closed\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is changed";  
     print STDERR "[$now] $localMessage" if($VERBOSE>0);
@@ -359,7 +359,6 @@ sub mywatch {
     }
     elsif($e->IN_MOVED_TO) {
       my $FileMove = $Events{$e->{cookie}} . ":$Filename";
-      
       $localMessage = "* $Events{$e->{cookie}} is moved to $Filename\n";
       $Message = "$Message\n$localMessage";
       $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Events{$e->{cookie}} is moved to $Filename";  
@@ -370,8 +369,7 @@ sub mywatch {
     }
   }
   elsif($e->IN_DELETE_SELF && -f $Filename && defined $WatchList{$Filename}) {
-  	
-  	$localMessage = "* $Filename is replaced but watched again\n";
+    $localMessage = "* $Filename is replaced but watched again\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is replaced";  
     print STDERR "[$now] $localMessage" if($VERBOSE>0);

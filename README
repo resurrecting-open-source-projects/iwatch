@@ -191,3 +191,8 @@ iwatch -r -e access,create -m cahya@localhost -x /etc/mail /etc
 
 iwatch -r -c "(w;ps -ef)|mail -s '%f was changed' cahya@localhost" /bin
   monitor /bin directory recursively and execute the command.
+
+iwatch -r -X '\.svn' ~/projects
+  monitor ~/projects directory recursively, but exclude any .svn directories
+  inside. This can't be done with a normal '-x' option since '-x' can
+  only exclude the defined path.
