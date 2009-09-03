@@ -21,7 +21,7 @@ use POSIX;
 use Sys::Syslog;
 
 my $PROGRAM = "iWatch";
-my $VERSION = "0.2.1";
+my $VERSION = "0.2.2";
 my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $PIDFILE = "/var/run/iwatch.pid";
@@ -201,14 +201,9 @@ foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
     $WatchList{$path->attribute("type")}{$path->value}{"filter"} = $path->attribute("filter");
 
     our $mask;
-    if(!defined($path->attribute("events"))) {
-      $mask = $InotifyEvents{'default'};
-    }
-    else {
-     $mask = getMask($path->attribute("events"));
-     $mask = $mask | $InotifyEvents{'create'} if($path->attribute("type") eq "recursive");
-    }
+    $mask = (defined($path->attribute("events")))? getMask($path->attribute("events")) : $InotifyEvents{'default'};
     $WatchList{$path->attribute("type")}{$path->value}{"mask"} = $mask;
+    $mask |= $InotifyEvents{'create'} if($path->attribute("type") eq "recursive");
     pathwatch($path->attribute("type"),$path->value); 
   }
 }
@@ -329,7 +324,7 @@ sub mywatch {
   $Events{'Cookie'} = $e->{cookie};
   $Message = "$Events{'Name'} $Filename";
   $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Message";
-  if($VERBOSE>0) {
+  if($VERBOSE>0 && $Path->{'mask'} & $mask) {
     print "[$now] $Message\n";
     syslog("info","$Message") if($Path->{'syslog'});
   }
@@ -337,9 +332,10 @@ sub mywatch {
     print STDERR "[$now] * Directory $Filename is watched\n" if($VERBOSE>0);
     syslog("info","* Directory $Filename is watched") if($Path->{'syslog'});
     print STDERR "Can't watch $Filename: $!\n"
-      if(!$inotify->watch ($Filename, $Path->{'mask'}, \&mywatch));
+      if(!$inotify->watch ($Filename, $Path->{'mask'} | $InotifyEvents{'create'}, \&mywatch));
   }
-  elsif($e->IN_CLOSE_WRITE && -f $Filename) {
+  return if(!($Path->{'mask'} & $mask));
+  if($e->IN_CLOSE_WRITE && -f $Filename) {
     $localMessage = "* $Filename is closed\n";
     $Message = "$Message\n$localMessage";
     $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Filename is changed";  
