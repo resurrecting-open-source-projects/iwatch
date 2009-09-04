@@ -366,6 +366,11 @@ sub mywatch {
       syslog("info","$localMessage") if($Path->{'syslog'});
       $Events{'OldFilename'} = $Events{$e->{cookie}};
       undef $Events{$e->{cookie}};
+      if($e->IN_ISDIR) {
+        our $mask;
+        $mask = ($Path->{'type'} eq "recursive")? $Path->{'mask'} | $InotifyEvents{'create'} : $Path->{'mask'};
+        pathwatch($Path->{'type'}, $Filename);
+      }
     }
   }
   elsif($e->IN_DELETE_SELF && -f $Filename && defined $WatchList{$Filename}) {
