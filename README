@@ -158,6 +158,9 @@ The iwatch's xml format is very simple and easy to understand, and it uses
 following DTD :
 
 <!ELEMENT config (guard,watchlist+)>
+<!ATTLIST config
+   charset CDATA "utf-8"
+>
 <!ELEMENT guard (#PCDATA)>
 <!ATTLIST guard
    email  CDATA #REQUIRED
