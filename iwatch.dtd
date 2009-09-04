@@ -1,4 +1,7 @@
 <!ELEMENT config (guard,watchlist+)>
+<!ATTLIST config
+   charset CDATA "utf-8"
+>
 <!ELEMENT guard (#PCDATA)>
 <!ATTLIST guard
    email  CDATA #REQUIRED

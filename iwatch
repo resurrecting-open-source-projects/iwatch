@@ -26,6 +26,7 @@ my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $PIDFILE = "/var/run/iwatch.pid";
 my $xmlobj;
+my %Config;
 my %WatchList;
 my %Mail;
 my %Events;
@@ -176,6 +177,7 @@ if(defined $options{d}) {
 my $inotify = new Linux::Inotify2;
 Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
 
+$Config{"charset"} = $xmlobj->child("config")->attribute("charset");
 foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
   foreach my $path ($watchlist->children("path")) {
     next if($path->attribute("type") ne "exception" &&
@@ -209,6 +211,8 @@ foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
 }
 
 $Mail{From} = $xmlobj->child("config")->child("guard")->attribute("email");
+$Mail{'Content-Type'} = "text/plain; charset=$Config{charset}"
+  if(defined $Config{"charset"});
 
 Event::loop;
 

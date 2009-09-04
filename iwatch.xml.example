@@ -12,7 +12,7 @@ iWatch will send email alert with guard's email address as sender
 Don't forget to set the correct email address here
 -->
 
-<config>
+<config charset="utf-8">
   <guard email="root@localhost" name="IWatch"/>
   <watchlist>
     <title>Public Website</title>
