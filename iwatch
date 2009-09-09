@@ -26,10 +26,7 @@ my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $PIDFILE = "/var/run/iwatch.pid";
 my $xmlobj;
-my %Config;
-my %WatchList;
-my %Mail;
-my %Events;
+my %iwatch;
 sub Usage;
 sub wanted;
 sub mywatch;
@@ -43,16 +40,16 @@ my %formats = (
   'p' => sub { "$PROGRAM" },
   'v' => sub { "$VERSION" },
   'f' => sub { 
-  	$Events{'Filename'} =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" \\])/\\$1/g; 
-  	"$Events{'Filename'}"; 
+    $iwatch{'events'}{'Filename'} =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" \\])/\\$1/g; 
+    "$iwatch{'events'}{'Filename'}"; 
   },
   'F' => sub {
-        return if($Events{'Name'} !~ /MOVED_TO/ );
-        $Events{'OldFilename'} =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" \\])/\\$1/g;
-        "$Events{'OldFilename'}";
+        return if($iwatch{'events'}{'Name'} !~ /MOVED_TO/ );
+        $iwatch{'events'}{'OldFilename'} =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" \\])/\\$1/g;
+        "$iwatch{'events'}{'OldFilename'}";
   },
-  'e' => sub { "$Events{'Name'}"; },
-  'c' => sub { "$Events{'Cookie'}"; },
+  'e' => sub { "$iwatch{'events'}{'Name'}"; },
+  'c' => sub { "$iwatch{'events'}{'Cookie'}"; },
 );
 my %InotifyEvents = (
   'access' => IN_ACCESS,
@@ -137,21 +134,7 @@ if(defined $options{w} || -e $ARGV[0]) {
   $xmlobj = new XML::SimpleObject::LibXML (XML => "$xmlstr");
 }
 else {
-  if(! -f $CONFIGFILE) {
-    Usage();
-  	exit 1;
-  }
-  my $parser = new XML::LibXML;
-  open(CF,"<$CONFIGFILE");
-  if(<CF> =~ /^<\?xml/) {
-    $parser->validation(1);
-  }
-  else {
-    print STDERR "Please use DTD for xml validation!\n";
-    $parser->validation(0);
-  }
-  close(CF);
-  $xmlobj = new XML::SimpleObject::LibXML ($parser->parse_file("$CONFIGFILE"));
+  $xmlobj = getXmlObject($CONFIGFILE);
 }
 
 if(defined $options{d}) {
@@ -175,46 +158,85 @@ if(defined $options{d}) {
 }
 
 my $inotify = new Linux::Inotify2;
+
+Event->signal (signal => 'HUP', cb => sub {
+  my $xmlobj = getXmlObject($CONFIGFILE);
+  while(my ($key, $watch) = each (%{$inotify->{'w'}}))
+  {
+    $watch->cancel;
+  }
+  %iwatch = xmlDispatch($xmlobj);
+})
+  if(!(defined $options{w} || -e $ARGV[0]));
+
+%iwatch = xmlDispatch($xmlobj);
 Event->io (fd => $inotify->fileno, poll => 'r', cb => sub { $inotify->poll });
-
-$Config{"charset"} = $xmlobj->child("config")->attribute("charset");
-foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
-  foreach my $path ($watchlist->children("path")) {
-    next if($path->attribute("type") ne "exception" &&
-      $path->attribute("type") ne "regexception");
-    if(-d $path->value) { $_ = $path->value; s/(.+)\/$/$1/; $path->value($_);}
-    $WatchList{$path->attribute("type")}{$path->value}{"type"} = $path->attribute("type");
-  }
-}
-
-foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
-  foreach my $path ($watchlist->children("path")) {
-    next if($path->attribute("type") eq "exception" ||
-      $path->attribute("type") eq "regexception");
-    if(-d $path->value) { $_ = $path->value; s/(.+)\/$/$1/; $path->value($_);}
-    $WatchList{$path->attribute("type")}{$path->value}{"contactpoint"} = 
-      $watchlist->child("contactpoint")->attribute("email") if(defined($watchlist->child("contactpoint")));
-    $WatchList{$path->attribute("type")}{$path->value}{"exec"} = $path->attribute("exec") if(defined($path->attribute("exec")));
-    $WatchList{$path->attribute("type")}{$path->value}{"alert"} = 
-      (defined($path->attribute("alert")) && $path->attribute("alert") eq "off") ? 0:1;
-    $WatchList{$path->attribute("type")}{$path->value}{"type"} = $path->attribute("type");
-    $WatchList{$path->attribute("type")}{$path->value}{"syslog"} =
-      (defined($path->attribute("syslog")) && $path->attribute("syslog") eq "on") ? 1:0;
-    $WatchList{$path->attribute("type")}{$path->value}{"filter"} = $path->attribute("filter");
-
-    our $mask;
-    $mask = (defined($path->attribute("events")))? getMask($path->attribute("events")) : $InotifyEvents{'default'};
-    $WatchList{$path->attribute("type")}{$path->value}{"mask"} = $mask;
-    $mask |= $InotifyEvents{'create'} if($path->attribute("type") eq "recursive");
-    pathwatch($path->attribute("type"),$path->value); 
-  }
-}
-
-$Mail{From} = $xmlobj->child("config")->child("guard")->attribute("email");
-$Mail{'Content-Type'} = "text/plain; charset=$Config{charset}"
-  if(defined $Config{"charset"});
-
 Event::loop;
+
+sub getXmlObject {
+  my ($configFile) = @_;
+  if(! -f $configFile) {
+    Usage();
+    exit 1;
+  }
+  my $parser = new XML::LibXML;
+  open(CF,"<$configFile");
+  if(<CF> =~ /^<\?xml/) {
+    $parser->validation(1);
+  }
+  else {
+    print STDERR "Please use DTD for xml validation!\n";
+    $parser->validation(0);
+  }
+  close(CF);
+  my $xmlobj = new XML::SimpleObject::LibXML ($parser->parse_file("$configFile"));
+  return $xmlobj;
+}
+
+sub xmlDispatch {
+  my ($xmlobj) = @_;
+  my %iwatch;
+  my %WatchList;
+  my %Mail;
+  $iwatch{"charset"} = $xmlobj->child("config")->attribute("charset");
+  foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
+    foreach my $path ($watchlist->children("path")) {
+      next if($path->attribute("type") ne "exception" &&
+        $path->attribute("type") ne "regexception");
+      if(-d $path->value) { $_ = $path->value; s/(.+)\/$/$1/; $path->value($_);}
+      $WatchList{$path->attribute("type")}{$path->value}{"type"} = $path->attribute("type");
+    }
+  }
+
+  foreach my $watchlist ($xmlobj->child("config")->children("watchlist")) {
+    foreach my $path ($watchlist->children("path")) {
+      next if($path->attribute("type") eq "exception" ||
+        $path->attribute("type") eq "regexception");
+      if(-d $path->value) { $_ = $path->value; s/(.+)\/$/$1/; $path->value($_);}
+      $WatchList{$path->attribute("type")}{$path->value}{"contactpoint"} = 
+        $watchlist->child("contactpoint")->attribute("email") if(defined($watchlist->child("contactpoint")));
+      $WatchList{$path->attribute("type")}{$path->value}{"exec"} = $path->attribute("exec") if(defined($path->attribute("exec")));
+      $WatchList{$path->attribute("type")}{$path->value}{"alert"} = 
+        (defined($path->attribute("alert")) && $path->attribute("alert") eq "off") ? 0:1;
+      $WatchList{$path->attribute("type")}{$path->value}{"type"} = $path->attribute("type");
+      $WatchList{$path->attribute("type")}{$path->value}{"syslog"} =
+        (defined($path->attribute("syslog")) && $path->attribute("syslog") eq "on") ? 1:0;
+      $WatchList{$path->attribute("type")}{$path->value}{"filter"} = $path->attribute("filter");
+
+      our $mask;
+      $mask = (defined($path->attribute("events")))? getMask($path->attribute("events")) : $InotifyEvents{'default'};
+      $WatchList{$path->attribute("type")}{$path->value}{"mask"} = $mask;
+      $mask |= $InotifyEvents{'create'} if($path->attribute("type") eq "recursive") . "\n";
+      pathwatch($path->attribute("type"), $path->value, %WatchList); 
+    }
+  }
+  $Mail{From} = $xmlobj->child("config")->child("guard")->attribute("email");
+  $Mail{'Content-Type'} = "text/plain; charset=$iwatch{charset}"
+    if(defined $iwatch{"charset"});
+  %{$iwatch{"mail"}} = %Mail;
+  %{$iwatch{"watchlist"}} = %WatchList;
+  return %iwatch;  
+}
 
 sub getMask {
   my ($events) = @_;
@@ -230,7 +252,7 @@ sub getMask {
 sub pathwatch {
   our $mask;
   my $key;
-  my ($mode,$path) = @_;
+  my ($mode, $path, %WatchList) = @_;
   if(-e "$path") {
     return if(defined $WatchList{"exception"}{$path});
     foreach $key (keys %{$WatchList{"exception"}}) {
@@ -248,7 +270,8 @@ sub pathwatch {
         if(!$inotify->watch ("$path", $mask, \&mywatch));
     }
     elsif($mode eq "recursive") {
-      File::Find::find({wanted => \&wanted, "no_chdir" => 1}, "$path");
+      #File::Find::find({wanted => \&wanted, "no_chdir" => 1}, "$path");
+      File::Find::find({wanted => sub{wanted(%WatchList);}, "no_chdir" => 1}, "$path");
     }
   }
 }
@@ -256,6 +279,7 @@ sub pathwatch {
 sub wanted {
   our $mask;
   my $key;
+  my (%WatchList) = @_;
   if(-d $File::Find::name) {
     return if(defined $WatchList{"exception"}{$File::Find::name});
     foreach $key (keys %{$WatchList{"exception"}}) {
@@ -275,7 +299,7 @@ sub wanted {
 }
 
 sub getWatchList {
-  my ($path,$filename) = @_;
+  my ($path, $filename, %WatchList) = @_;
   my $rv;
   my $key;
   return undef if(defined $WatchList{"exception"}{$path});
@@ -308,25 +332,27 @@ sub mywatch {
   my $Message;
   my $localMessage;
   my $mask;
-  my $Filename = $Events{'Filename'} = $e->fullname;
+  my %WatchList = %{$iwatch{"watchlist"}};
+  my %Mail= %{$iwatch{"mail"}};
+  my $Filename = $iwatch{'events'}{'Filename'} = $e->fullname;
   return if(defined $WatchList{"exception"}{$Filename});
-  my $Path = getWatchList($e->{w}->{name},$e->{name});
+  my $Path = getWatchList($e->{w}->{name}, $e->{name}, %WatchList);
   return if(!defined($Path));
   
   my $now = POSIX::strftime "%e/%b/%Y %H:%M:%S", localtime;
-  $Events{'Name'} = "";
+  $iwatch{'events'}{'Name'} = "";
   $mask = $e->mask;
   if($e->IN_ISDIR) {
     $mask ^= IN_ISDIR;
-    $Events{'Name'} = "IN_ISDIR,";
+    $iwatch{'events'}{'Name'} = "IN_ISDIR,";
   }
   if($e->IN_ONESHOT) {
     $mask ^= IN_ISDIR;
-    $Events{'Name'} = "IN_ONESHOT,";
+    $iwatch{'events'}{'Name'} = "IN_ONESHOT,";
   }
-  $Events{'Name'} .= $InotifyEventNames{$mask};
-  $Events{'Cookie'} = $e->{cookie};
-  $Message = "$Events{'Name'} $Filename";
+  $iwatch{'events'}{'Name'} .= $InotifyEventNames{$mask};
+  $iwatch{'events'}{'Cookie'} = $e->{cookie};
+  $Message = "$iwatch{'events'}{'Name'} $Filename";
   $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Message";
   if($VERBOSE>0 && $Path->{'mask'} & $mask) {
     print "[$now] $Message\n";
@@ -355,21 +381,21 @@ sub mywatch {
   }
   elsif($e->IN_MOVED_FROM || $e->IN_MOVED_TO) {
     if($e->IN_MOVED_FROM) {
-      $Events{$e->{cookie}} = "$Filename";
+      $iwatch{'events'}{$e->{cookie}} = "$Filename";
     }
     elsif($e->IN_MOVED_TO) {
-      my $FileMove = $Events{$e->{cookie}} . ":$Filename";
-      $localMessage = "* $Events{$e->{cookie}} is moved to $Filename\n";
+      my $FileMove = $iwatch{'events'}{$e->{cookie}} . ":$Filename";
+      $localMessage = "* $iwatch{'events'}{$e->{cookie}} is moved to $Filename\n";
       $Message = "$Message\n$localMessage";
-      $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $Events{$e->{cookie}} is moved to $Filename";  
+      $Mail{Subject} = "[$PROGRAM] " . hostname() . ": $iwatch{'events'}{$e->{cookie}} is moved to $Filename";  
       print STDERR "[$now] $localMessage" if($VERBOSE>0);
       syslog("info","$localMessage") if($Path->{'syslog'});
-      $Events{'OldFilename'} = $Events{$e->{cookie}};
-      undef $Events{$e->{cookie}};
+      $iwatch{'events'}{'OldFilename'} = $iwatch{'events'}{$e->{cookie}};
+      undef $iwatch{'events'}{$e->{cookie}};
       if($e->IN_ISDIR) {
         our $mask;
         $mask = ($Path->{'type'} eq "recursive")? $Path->{'mask'} | $InotifyEvents{'create'} : $Path->{'mask'};
-        pathwatch($Path->{'type'}, $Filename);
+        pathwatch($Path->{'type'}, $Filename, %WatchList);
       }
     }
   }
