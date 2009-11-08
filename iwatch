@@ -431,7 +431,7 @@ sub stringf($%) {
   my $re = join("|", map { "%".quotemeta } keys(%format));
   $string =~ s/$re/_stringf($&, \%format)/ge;
   $string;
- }
+}
  
 sub _stringf {
   my ($s,$f) = @_;
