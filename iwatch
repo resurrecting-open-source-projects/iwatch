@@ -32,7 +32,7 @@ sub wanted;
 sub mywatch;
 sub pathwatch;
 sub getMask;
-sub stringf;
+sub stringf($%);
 $Getopt::Std::STANDARD_HELP_VERSION = 1;
 
 my %options=();
@@ -426,16 +426,17 @@ sub mywatch {
   }
 }
 
-sub stringf() {
-  my $ind;
-  my ($string,%format) = @_;
-  foreach my $key (keys %format) {
-    $ind = index $string,"%$key";
-    next if($ind == -1);
-    substr($string,$ind,2) = &{$format{$key}};
-    $string = stringf($string,%format);
-  }
+sub stringf($%) {
+  my ($string, %format) = @_;
+  my $re = join("|", map { "%".quotemeta } keys(%format));
+  $string =~ s/$re/_stringf($&, \%format)/ge;
   $string;
+ }
+ 
+sub _stringf {
+  my ($s,$f) = @_;
+  $s =~ s/^\%//;
+  &{$f->{$s}};
 }
 
 sub Usage {
