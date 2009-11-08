@@ -32,6 +32,8 @@ close_write, create, delete, move, delete_self and move_self.
 But you can specify any possible events, like access, attrib, modify
 all_events and default.
 
+Since version 0.2.2 it is possible to change the charset and to reload the 
+iwatch daemon using sighup signal.
 
 How To Use:
 
