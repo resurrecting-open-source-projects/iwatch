@@ -1,5 +1,14 @@
 iWatch: Realtime filesystem monitor
 
+version 0.2.2 (8. November 2009)
+* Changes/New Features:
+  - Fix create event.
+  - Fix the bug where the file being watched contains one of the formats 
+    available for substitution (thanks to Hanno Hecker for the patch).
+  - Watch the renamed/moved directory properly.
+  - Add a functionality to change the charset.
+  - Add a functionality to reload the configuration file using the SIGHUP signal.
+
 version 0.2.1 (12. March 2007)
 * Changes/New Features:
   - Option -X was added. It is exception with regex string.
