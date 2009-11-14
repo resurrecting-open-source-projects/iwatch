@@ -25,6 +25,7 @@ my $VERSION = "0.2.2";
 my $VERBOSE = 0;
 my $CONFIGFILE = "/etc/iwatch.xml";
 my $PIDFILE = "/var/run/iwatch.pid";
+my $CHARSET = "utf-8";
 my $xmlobj;
 my %iwatch;
 sub Usage;
@@ -79,7 +80,7 @@ foreach my $EventName (keys %InotifyEvents) {
   $InotifyEventNames{$InotifyEvents{$EventName}} = "IN_\U$EventName";
 }
 
-my $opt = getopts("vdf:p:c:e:hm:rst:w:x:X:",\%options);
+my $opt = getopts("vdf:p:c:C:e:hm:rst:w:x:X:",\%options);
 
 if(defined $options{h} || $opt == 0) {
   Usage();
@@ -99,7 +100,7 @@ delete @ENV{qw(ENV IFS CDPATH)};
 $ENV{PATH} = "/bin:/usr/bin:/usr/sbin";
 
 if((defined $options{d} || defined $options{f} || defined $options{p}) && 
-   (-e $ARGV[0] || defined $options{c} || defined $options{e} || defined $options{m} 
+   (-e $ARGV[0] || defined $options{c} || defined $options{C} || defined $options{e} || defined $options{m} 
      || defined $options{r} || defined $options{s} || defined $options{t} || defined $options{w} || defined $options{x} | defined $options{X})) {
      print STDERR "Options [d|f|p] and [c|e|m|r|s|w|x] are mutually exlusive, you can't mix it!\n";
      Usage();
@@ -109,7 +110,7 @@ if((defined $options{d} || defined $options{f} || defined $options{p}) &&
 if(defined $options{w} || -e $ARGV[0]) {
   $VERBOSE += 1;
   my $user = (getpwuid($>))[0];
-  my $xmlstr = "<config>\n";
+  my $xmlstr = "<config charset=\"" . ((defined $options{C}) ? $options{C} : $CHARSET) . "\">\n";
   $xmlstr .= "  <guard email=\"" . "$user\@localhost\"/>\n";
   $xmlstr .= "  <watchlist>\n";
   $xmlstr .= "    <contactpoint email=\"" . ((defined $options{m})? $options{m} : 
@@ -462,7 +463,7 @@ Usage: iwatch [-d] [-f <config file>] [-v] [-p <pid file>]
   -v Verbose mode.
 
 And in the command line mode:
-Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email address>] 
+Usage: iwatch [-c command] [-C charset] [-e event[,event[,..]]] [-h|--help] [-m <email address>] 
          [-r] [-s <on|off>] [-t <filter string>] [-v] [--version] [-x exception]
          [-X <regex string as exception>] <target>
 
@@ -476,6 +477,8 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email addres
        %F The old filename in case moved_to event.
        %p Program name (iWatch)
        %v Version number
+  -C charset
+     Specify the charset (default is utf-8)
   -e event[,event[,..]]
      Specify a list of events you want to watch. Following are the possible events you can use:
        access        : file was accessed

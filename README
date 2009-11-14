@@ -32,8 +32,8 @@ close_write, create, delete, move, delete_self and move_self.
 But you can specify any possible events, like access, attrib, modify
 all_events and default.
 
-Since version 0.2.2 it is possible to change the charset and to reload the 
-iwatch daemon using sighup signal.
+Since version 0.2.2 we can specify a charset in command line or 
+in xml file. The iwatch daemon can be reloaded using sighup signal.
 
 How To Use:
 
@@ -47,7 +47,7 @@ Usage: iwatch [-d] [-f <config file>] [-v]
   -v Verbose mode.
 
 In the command line mode iWatch has following options:
-Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email address>] 
+Usage: iwatch [-c command] [-C charset] [-e event[,event[,..]]] [-h|--help] [-m <email address>] 
          [-r] [-r] [-s <on|off>] [-t filter] [-v] [--version] [-x exception]
          [-X <regex string as exception>] <target>
 
@@ -61,6 +61,8 @@ Usage: iwatch [-c command] [-e event[,event[,..]]] [-h|--help] [-m <email addres
        %F The old filename in case moved_to event
        %p Program name (iWatch)
        %v Version number
+  -C charset
+     Specify the charset (default is utf-8)
   -e event[,event[,..]]
      Specify a list of events you want to watch. Following are the possible events you can use:
        access        : file was accessed
